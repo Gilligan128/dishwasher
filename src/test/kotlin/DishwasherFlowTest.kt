@@ -44,8 +44,8 @@ internal class DishwasherFlowTest : FeatureSpec({
     }
 
     feature("dishwasher timing") {
+        val currentMeal = Meal.Dinner
         scenario("dishwasher keeps running if not enough time has passed") {
-            val currentMeal = Meal.Dinner
             val householdInput =
                 arbitraryHousehold().copy(hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes + 1).toDouble())
             val sut = dishwasherHouseholdFlow(householdInput)
@@ -55,9 +55,47 @@ internal class DishwasherFlowTest : FeatureSpec({
 
             result.second.dishwasherRunning shouldBe true
             result.first shouldBe 0
+            result.second.numberOfDishesInWasher shouldBe stateInput.numberOfDishesInWasher
         }
 
-        
+        scenario("dishwasher stops running if enough time has passed and the run threshold has not been reached") {
+            forAll(iterations = 20, gena = HouseholdGenerator()) { householdInput: HouseholdConstants ->
+                val tailoredHouseholdInput =
+                    householdInput.copy(
+                        hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes - 1).toDouble(),
+                        numberOfDishesPerMeal = 1,
+                        dishwasherDishCapacity = 2,
+                        dishwasherUtilizationPercent = 1.0
+                    )
+                val sut = dishwasherHouseholdFlow(tailoredHouseholdInput)
+                val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal)
+
+                val result = sut(stateInput)
+
+                result.second.dishwasherRunning shouldBe false
+                result.first shouldBe 1
+                result.second.numberOfDishesInWasher shouldBe tailoredHouseholdInput.numberOfDishesPerMeal
+                true
+            }
+        }
+
+        scenario("dishwasher starts when enough dishes have put inside") {
+            forAll(iterations = 20, gena = HouseholdGenerator()) { householdInput: HouseholdConstants ->
+                val sut = dishwasherHouseholdFlow(householdInput)
+
+                val runThreshold =
+                    Math.round(householdInput.dishwasherDishCapacity * householdInput.dishwasherUtilizationPercent)
+                        .toInt()
+                val stateInput =
+                    DishwasherFlowState(numberOfDishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal)
+
+                val result = sut(stateInput)
+
+                result.first shouldBe 0
+                result.second.dishwasherRunning shouldBe true
+                true
+            }
+        }
     }
 })
 
