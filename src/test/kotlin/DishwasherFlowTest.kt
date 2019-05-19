@@ -1,3 +1,4 @@
+import io.kotlintest.properties.Gen
 import io.kotlintest.properties.forAll
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FeatureSpec
@@ -59,14 +60,9 @@ internal class DishwasherFlowTest : FeatureSpec({
         }
 
         scenario("dishwasher stops running if enough time has passed and the run threshold has not been reached") {
-            forAll(iterations = 20, gena = HouseholdGenerator()) { householdInput: HouseholdConstants ->
-                val tailoredHouseholdInput =
-                    householdInput.copy(
-                        hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes - 1).toDouble(),
-                        numberOfDishesPerMeal = 1,
-                        dishwasherDishCapacity = 2,
-                        dishwasherUtilizationPercent = 1.0
-                    )
+
+            forAll(iterations = 20, gena = Gen.bind(HouseholdGenerator(), dishwasherThatWillNotStartRightAfterItFinishes)) { householdInput: HouseholdConstants ->
+                val tailoredHouseholdInput = householdInput
                 val sut = dishwasherHouseholdFlow(tailoredHouseholdInput)
                 val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal)
 
@@ -99,12 +95,35 @@ internal class DishwasherFlowTest : FeatureSpec({
     }
 
     feature("dishes queued on counter") {
+        scenario("all dishes on counter move to dishwasher when it is idle") {
+            forAll(iterations = 20, gena = HouseholdGenerator()) { arbitraryHousehold: HouseholdConstants ->
+                val sut = dishwasherHouseholdFlow(arbitraryHousehold)
+                val stateInput = DishwasherFlowState(numberOfDishesOnCounter = 1)
 
+                val result = sut(stateInput)
+
+                result.second.numberOfDishesInWasher shouldBe stateInput.numberOfDishesOnCounter + arbitraryHousehold.numberOfDishesPerMeal
+                result.second.numberOfDishesOnCounter shouldBe 0
+                true
+            }
+        }
     }
 })
+
+private fun shortestTimeBetweenMeals(): Int {
+    return Meal.values().map { it.hoursBeforeWeDirtyDishes }.min()!!
+}
 
 
 private fun arbitraryHousehold(): HouseholdConstants {
     return HouseholdGenerator().random().first()
 }
 
+val dishwasherThatWillNotStartRightAfterItFinishes: (HouseholdConstants) -> HouseholdConstants = {
+    it.copy(
+        hoursPerCycle = (shortestTimeBetweenMeals() - 1).toDouble(),
+        numberOfDishesPerMeal = 1,
+        dishwasherDishCapacity = 2,
+        dishwasherUtilizationPercent = 1.0
+    )
+}

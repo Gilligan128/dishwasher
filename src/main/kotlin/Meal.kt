@@ -1,5 +1,3 @@
-sealed class Meal(val hoursBeforeWeDirtyDishes: Int) {
-    object Breakfast: Meal(14)
-    object Lunch: Meal(5)
-    object Dinner: Meal(5)
+enum class Meal(val hoursBeforeWeDirtyDishes: Int) {
+    Breakfast(14), Lunch(5), Dinner(5)
 }

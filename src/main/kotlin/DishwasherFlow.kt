@@ -7,12 +7,13 @@ fun dishwasherFlow(
         state.dishwasherRunning && household.hoursPerCycle > state.currentMeal.hoursBeforeWeDirtyDishes.toDouble()
     val dishwasherFinished = state.dishwasherRunning && !dishwasherStillRunning
 
+    val queuedDishes = state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
     val numberOfDishesInWasher = when {
-        dishwasherFinished -> household.numberOfDishesPerMeal
+        dishwasherFinished -> queuedDishes
         dishwasherStillRunning -> state.numberOfDishesInWasher
         else -> Math.min(
             household.dishwasherDishCapacity,
-            state.numberOfDishesInWasher + household.numberOfDishesPerMeal
+            state.numberOfDishesInWasher + queuedDishes
         )
     }
 
