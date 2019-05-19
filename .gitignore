@@ -53,3 +53,6 @@ bin/
 .idea/**/dynamic.xml
 .idea/**/uiDesigner.xml
 .idea/**/dbnavigator.xml
+.gradle/4.10/fileHashes/fileHashes.lock
+.gradle/4.10/fileHashes/fileHashes.bin
+*.lock
