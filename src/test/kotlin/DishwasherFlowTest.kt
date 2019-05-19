@@ -1,44 +1,47 @@
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
+import io.kotlintest.properties.Gen
+import io.kotlintest.shouldBe
+import io.kotlintest.specs.FeatureSpec
 
-internal class DishwasherFlowTest {
+internal class DishwasherFlowTest : FeatureSpec({
 
-
-
-    @Test
-    fun queuesDishesFromMealIntoDishwasher() {
+    feature("dirty dishes") {
         val sut = DishwasherFlow()
-        val householdInput = HouseholdConstants(
-            dishwasherUtilizationPercent = .8,
-            dishwasherDishCapacity = 20,
-            numberOfDishesPerMeal = 4,
-            waterGallonsUsedPerCycle = 4,
-            hoursPerCycle = 2.5
-        )
-        val stateInput = DishwasherFlowState()
+        scenario("queues dishes from meal into dishwasher") {
 
-        val result = sut(stateInput, householdInput)
+            val householdInput = anonymousHousehold().copy(
+                numberOfDishesPerMeal =         1,
+                dishwasherDishCapacity = 2
+            )
+            val stateInput = DishwasherFlowState()
 
-        assertEquals(householdInput.numberOfDishesPerMeal, result.numberOfDishesInWasher)
+            val result = sut(stateInput, householdInput)
+
+            result.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
+        }
+
+        scenario("only queues dishes into washer up to capacity") {
+            val numberOfDishesPerMeal = 2
+            val numberOfDishesBeyondCapacity = 1
+            val householdInput = anonymousHousehold().copy(
+                dishwasherDishCapacity = numberOfDishesPerMeal - numberOfDishesBeyondCapacity,
+                numberOfDishesPerMeal = numberOfDishesPerMeal
+            )
+            val stateInput = DishwasherFlowState()
+
+            val result = sut(stateInput, householdInput)
+
+            result.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
+            result.numberOfDishesOnCounter shouldBe numberOfDishesBeyondCapacity
+        }
     }
+})
 
-    @Test
-    fun onlyQueuesDishesIntoWasherUpToCapacity() {
-        val sut = DishwasherFlow()
-        val numberOfDishesPerMeal = 2
-        val householdInput = HouseholdConstants(
-            dishwasherUtilizationPercent = .8,
-            dishwasherDishCapacity = numberOfDishesPerMeal-1,
-            numberOfDishesPerMeal = numberOfDishesPerMeal,
-            waterGallonsUsedPerCycle = 1,
-            hoursPerCycle = 2.5
-        )
-        val stateInput = DishwasherFlowState()
-
-        val result = sut(stateInput, householdInput)
-
-        assertEquals(householdInput.dishwasherDishCapacity, result.numberOfDishesInWasher)
-        assertEquals(1, result.numberOfDishesOnCounter)
-    }
-
+private fun anonymousHousehold(): HouseholdConstants {
+    return HouseholdConstants(
+        dishwasherUtilizationPercent = Gen.double().random().first { it > 0 && it <= 1 },
+        dishwasherDishCapacity = Gen.int().random().first(),
+        numberOfDishesPerMeal = Gen.int().random().first(),
+        waterGallonsUsedPerCycle = Gen.int().random().first(),
+        hoursPerCycle = Gen.double().random().first()
+    )
 }
