@@ -15,7 +15,7 @@ internal class DishwasherFlowTest : FeatureSpec({
 
             val result = sut(stateInput)
 
-            result.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
+            result.second.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
         }
 
         scenario("only queues dishes into washer up to capacity") {
@@ -25,8 +25,8 @@ internal class DishwasherFlowTest : FeatureSpec({
 
             val result = sut(stateInput)
 
-            result.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
-            result.numberOfDishesOnCounter shouldBe dishesOverCapacity
+            result.second.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
+            result.second.numberOfDishesOnCounter shouldBe dishesOverCapacity
         }
 
         scenario("queues dishes to onto counter when dishwasher is running") {
@@ -35,9 +35,9 @@ internal class DishwasherFlowTest : FeatureSpec({
 
                 val result = dishwasherHouseholdFlow(scenarioHouseholdInput)(stateInput)
 
-                val assertion = result.numberOfDishesOnCounter == scenarioHouseholdInput.numberOfDishesPerMeal
+                val assertion = result.second.numberOfDishesOnCounter == scenarioHouseholdInput.numberOfDishesPerMeal
                 if (!assertion)
-                    println("expected: ${scenarioHouseholdInput.numberOfDishesPerMeal}; Actual: ${result.numberOfDishesOnCounter}")
+                    println("expected: ${scenarioHouseholdInput.numberOfDishesPerMeal}; Actual: ${result.second.numberOfDishesOnCounter}")
                 assertion
             }
         }
@@ -45,8 +45,19 @@ internal class DishwasherFlowTest : FeatureSpec({
 
     feature("dishwasher timing") {
         scenario("dishwasher keeps running if not enough time has passed") {
+            val currentMeal = Meal.Dinner
+            val householdInput =
+                arbitraryHousehold().copy(hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes + 1).toDouble())
+            val sut = dishwasherHouseholdFlow(householdInput)
+            val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal)
 
+            val result = sut(stateInput)
+
+            result.second.dishwasherRunning shouldBe true
+            result.first shouldBe 0
         }
+
+        
     }
 })
 
