@@ -97,6 +97,10 @@ internal class DishwasherFlowTest : FeatureSpec({
             }
         }
     }
+
+    feature("dishes queued on counter") {
+
+    }
 })
 
 
