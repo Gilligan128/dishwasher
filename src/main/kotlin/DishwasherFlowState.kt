@@ -5,3 +5,4 @@ data class DishwasherFlowState(
     val dishwasherRunning: Boolean = false,
     val cyclesRan: Int = 0
 )
+

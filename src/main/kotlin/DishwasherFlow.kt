@@ -16,3 +16,5 @@ class DishwasherFlow : (DishwasherFlowState, HouseholdConstants) -> DishwasherFl
         )
     }
 }
+
+fun dishwasherHouseholdFlow(household: HouseholdConstants) = { state:DishwasherFlowState -> DishwasherFlow()(state, household)}

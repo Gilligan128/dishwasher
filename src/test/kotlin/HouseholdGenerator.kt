@@ -14,8 +14,8 @@ class HouseholdGenerator: Gen<HouseholdConstants> {
                     1.0
                 ).random().first(),
                 numberOfDishesPerMeal = numberOfDishesPerMeal,
-                dishwasherDishCapacity = Gen.positiveIntegers().filter { it <= numberOfDishesPerMeal }.random().first(),
-                waterGallonsUsedPerCycle = Gen.positiveIntegers().random().first(),
+                dishwasherDishCapacity = Gen.positiveIntegers().filter { it >= numberOfDishesPerMeal }.random().first(),
+                dishwasherWaterUsage = Gen.from(listOf(DishwasherWaterUsage.EnergyStar, DishwasherWaterUsage.Standard)).random().first(),
                 hoursPerCycle = Gen.numericDoubles(1.0, 4.0).random().first()
             )
         }
