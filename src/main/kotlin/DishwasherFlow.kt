@@ -16,7 +16,6 @@ fun dishwasherFlow(
             state.numberOfDishesInWasher + queuedDishes
         )
     }
-
     val numberOfDishesOnCounter = when {
         state.dishwasherRunning -> queuedDishes
         else -> Math.max(
@@ -29,11 +28,14 @@ fun dishwasherFlow(
     val runThresholdReached = numberOfDishesInWasher >= runThreshold
     val shouldStartDishwasher = runThresholdReached && !dishwasherStillRunning
 
+    val nextMeal = getNextMeal(state.currentMeal)
+
     return Pair(
         if (dishwasherFinished) 1 else 0, DishwasherFlowState(
             numberOfDishesInWasher = numberOfDishesInWasher,
             numberOfDishesOnCounter = numberOfDishesOnCounter,
-            dishwasherRunning = dishwasherStillRunning || shouldStartDishwasher
+            dishwasherRunning = dishwasherStillRunning || shouldStartDishwasher,
+            currentMeal = nextMeal
         )
     )
 }
@@ -42,3 +44,11 @@ fun dishwasherHouseholdFlow(household: HouseholdConstants) =
     { state: DishwasherFlowState -> dishwasherFlow(state, household) }
 
 typealias CyclesRan = Int
+
+private fun getNextMeal(meal: Meal): Meal {
+    val mealIndex = Meal.values().indexOfFirst { it == meal }
+    return Meal.values()[when (mealIndex) {
+        Meal.values().size-1 -> 0
+        else -> mealIndex + 1
+    }]
+}

@@ -128,25 +128,51 @@ internal class DishwasherFlowTest : FeatureSpec({
         }
 
         scenario("only some dishes on counter move to dishwasher when it is idle but there is not enough space") {
-            forAll(
-                iterations = 20,
-                gena = HouseholdGenerator()
-            ) { arbitraryHousehold ->
+            val dishOffset = 2
+            forAll(Gen.bind(HouseholdGenerator()) {
+                it.copy(
+                    numberOfDishesPerMeal = Math.max(
+                        it.numberOfDishesPerMeal,
+                        dishOffset
+                    ), dishwasherDishCapacity = Math.max(it.dishwasherDishCapacity, dishOffset)
+                )
+            }) { arbitraryHousehold ->
                 val sut = dishwasherHouseholdFlow(arbitraryHousehold)
                 val stateInput = DishwasherFlowState(
-                    numberOfDishesOnCounter = arbitraryHousehold.dishwasherDishCapacity - 2,
+                    numberOfDishesOnCounter = arbitraryHousehold.dishwasherDishCapacity - dishOffset,
                     dishwasherRunning = false
                 )
 
                 val result = sut(stateInput)
 
-                result.second.numberOfDishesOnCounter shouldBe arbitraryHousehold.numberOfDishesPerMeal - 2
+                result.second.numberOfDishesOnCounter shouldBe arbitraryHousehold.numberOfDishesPerMeal - dishOffset
                 true
             }
         }
     }
+
+    feature("meal times") {
+        scenario("time passes to the next appropriate meal") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                val sut = dishwasherHouseholdFlow(HouseholdConstants())
+                val stateInput = DishwasherFlowState(currentMeal = meal)
+
+                val result = sut(stateInput)
+                result.second.currentMeal shouldBe getNextMeal(meal)
+                true
+            }
+        }
+
+    }
 })
 
+private fun getNextMeal(meal: Meal): Meal {
+    val mealIndex = Meal.values().indexOfFirst { it == meal }
+    return Meal.values()[when (mealIndex) {
+        Meal.values().size-1 -> 0
+        else -> mealIndex + 1
+    }]
+}
 
 
 private fun longestTimeBetweenMeals() = Meal.values().map { it.hoursBeforeWeDirtyDishes }.max()!!.toDouble()
