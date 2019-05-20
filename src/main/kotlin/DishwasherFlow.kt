@@ -18,10 +18,10 @@ fun dishwasherFlow(
     }
 
     val numberOfDishesOnCounter = when {
-        state.dishwasherRunning -> household.numberOfDishesPerMeal
+        state.dishwasherRunning -> queuedDishes
         else -> Math.max(
             0,
-            state.numberOfDishesInWasher + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
+            state.numberOfDishesInWasher + queuedDishes - household.dishwasherDishCapacity
         )
     }
 
