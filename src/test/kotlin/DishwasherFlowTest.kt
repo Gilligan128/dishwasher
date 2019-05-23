@@ -29,19 +29,6 @@ internal class DishwasherFlowTest : FeatureSpec({
             result.second.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
             result.second.numberOfDishesOnCounter shouldBe dishesOverCapacity
         }
-
-        scenario("queues dishes to onto counter when dishwasher is running") {
-            forAll(HouseholdGenerator()) { scenarioHouseholdInput: HouseholdConstants ->
-                val stateInput = DishwasherFlowState(dishwasherRunning = true)
-
-                val result = dishwasherHouseholdFlow(scenarioHouseholdInput)(stateInput)
-
-                val assertion = result.second.numberOfDishesOnCounter == scenarioHouseholdInput.numberOfDishesPerMeal
-                if (!assertion)
-                    println("expected: ${scenarioHouseholdInput.numberOfDishesPerMeal}; Actual: ${result.second.numberOfDishesOnCounter}")
-                assertion
-            }
-        }
     }
 
     feature("dishwasher timing") {
@@ -64,15 +51,14 @@ internal class DishwasherFlowTest : FeatureSpec({
             forAll(
                 Gen.bind(HouseholdGenerator(), dishwasherWillNotStartRightAfterItFinishes())
             ) { householdInput: HouseholdConstants ->
-                val tailoredHouseholdInput = householdInput
-                val sut = dishwasherHouseholdFlow(tailoredHouseholdInput)
+                val sut = dishwasherHouseholdFlow(householdInput)
                 val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal)
 
                 val result = sut(stateInput)
 
                 result.second.dishwasherRunning shouldBe false
                 result.first shouldBe 1
-                result.second.numberOfDishesInWasher shouldBe tailoredHouseholdInput.numberOfDishesPerMeal
+                result.second.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
                 true
             }
         }
@@ -97,6 +83,19 @@ internal class DishwasherFlowTest : FeatureSpec({
     }
 
     feature("dishes queued on counter") {
+        scenario("queues dishes to onto counter when dishwasher is running") {
+            forAll(Gen.bind(HouseholdGenerator(),::dishwasherRunsThroughAnyMeal)) { scenarioHouseholdInput: HouseholdConstants ->
+                val stateInput = DishwasherFlowState(dishwasherRunning = true)
+
+                val result = dishwasherHouseholdFlow(scenarioHouseholdInput)(stateInput)
+
+                val assertion = result.second.numberOfDishesOnCounter == scenarioHouseholdInput.numberOfDishesPerMeal
+                if (!assertion)
+                    println("expected: ${scenarioHouseholdInput.numberOfDishesPerMeal}; Actual: ${result.second.numberOfDishesOnCounter}")
+                assertion
+            }
+        }
+
         scenario("all dishes on counter move to dishwasher when it is idle") {
             forAll(
                 Gen.bind(
@@ -116,12 +115,27 @@ internal class DishwasherFlowTest : FeatureSpec({
         }
 
         scenario("dishes build up on counter while dishwasher runs") {
-            forAll(Gen.bind(HouseholdGenerator()) { it.copy(hoursPerCycle = longestTimeBetweenMeals() + 1) }) { arbitraryHousehold ->
+            forAll(Gen.bind(HouseholdGenerator(), ::dishwasherRunsThroughAnyMeal)) { arbitraryHousehold ->
                 val sut = dishwasherHouseholdFlow(arbitraryHousehold)
                 val stateInput = DishwasherFlowState(numberOfDishesOnCounter = 5, dishwasherRunning = true)
 
                 val result = sut(stateInput)
                 result.second.numberOfDishesOnCounter shouldBe stateInput.numberOfDishesOnCounter + arbitraryHousehold.numberOfDishesPerMeal
+
+                true
+            }
+        }
+
+        scenario("puts dishes into washer when dishwasher finishes running") {
+            forAll(Gen.bind(HouseholdGenerator()) { it.copy(hoursPerCycle = shortestTimeBetweenMeals().toDouble() - 1) }) { arbitraryHousehold ->
+                val sut = dishwasherHouseholdFlow(arbitraryHousehold)
+                val stateInput = DishwasherFlowState(
+                    numberOfDishesOnCounter = arbitraryHousehold.dishwasherDishCapacity - arbitraryHousehold.numberOfDishesPerMeal,
+                    dishwasherRunning = true
+                )
+
+                val result = sut(stateInput)
+                result.second.numberOfDishesOnCounter shouldBe 0
 
                 true
             }
@@ -149,6 +163,8 @@ internal class DishwasherFlowTest : FeatureSpec({
                 true
             }
         }
+
+        scenario("")
     }
 
     feature("meal times") {
@@ -162,14 +178,23 @@ internal class DishwasherFlowTest : FeatureSpec({
                 true
             }
         }
+    }
 
+    feature("run simulator") {
+        scenario("simulates 2 days for a random household") {
+            val household = arbitraryHousehold()
+            run(household, 7)
+        }
     }
 })
+
+private fun dishwasherRunsThroughAnyMeal(it: HouseholdConstants) =
+    it.copy(hoursPerCycle = longestTimeBetweenMeals() + 1)
 
 private fun getNextMeal(meal: Meal): Meal {
     val mealIndex = Meal.values().indexOfFirst { it == meal }
     return Meal.values()[when (mealIndex) {
-        Meal.values().size-1 -> 0
+        Meal.values().size - 1 -> 0
         else -> mealIndex + 1
     }]
 }

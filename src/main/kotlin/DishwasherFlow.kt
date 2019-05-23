@@ -1,6 +1,24 @@
+typealias CyclesRan = Int
+
+fun run(household: HouseholdConstants, days: Int) {
+    val runHousehold = dishwasherHouseholdFlow(household)
+    var totalHours = 0
+    var maxHours = days*24
+    println("Given Household $household")
+    generateSequence(Pair(0, DishwasherFlowState())) { next ->
+        runHousehold(next.second) }
+        .takeWhile {
+            totalHours+= it.second.currentMeal.hoursBeforeWeDirtyDishes
+            totalHours <= maxHours
+        }
+        .forEach {
+            println(it.second)
+        }
+}
+
 fun dishwasherFlow(
-    state: DishwasherFlowState,
-    household: HouseholdConstants
+    household: HouseholdConstants,
+    state: DishwasherFlowState
 ): Pair<CyclesRan, DishwasherFlowState> {
 
     val dishwasherStillRunning: Boolean =
@@ -17,7 +35,7 @@ fun dishwasherFlow(
         )
     }
     val numberOfDishesOnCounter = when {
-        state.dishwasherRunning -> queuedDishes
+        dishwasherStillRunning -> queuedDishes
         else -> Math.max(
             0,
             state.numberOfDishesInWasher + queuedDishes - household.dishwasherDishCapacity
@@ -40,15 +58,29 @@ fun dishwasherFlow(
     )
 }
 
-fun dishwasherHouseholdFlow(household: HouseholdConstants) =
-    { state: DishwasherFlowState -> dishwasherFlow(state, household) }
 
-typealias CyclesRan = Int
+fun dishwasherFlow2(
+    household: HouseholdConstants,
+    state: FlowState,
+    transitionFromFinished: () -> Pair<Int, FlowState>,
+    transitionFromRunning: () -> Pair<Int, FlowState>,
+    transitionFromMeal: () -> Pair<Int, FlowState>
+): Pair<Int, FlowState> {
+    return when (state) {
+        is FlowState.DishwasherFinished -> transitionFromFinished()
+        is FlowState.DishwasherRunning -> transitionFromRunning()
+        is FlowState.MealTime -> transitionFromMeal()
+    }
+}
+
+
+fun dishwasherHouseholdFlow(household: HouseholdConstants) =
+    { state: DishwasherFlowState -> dishwasherFlow(household, state) }
 
 private fun getNextMeal(meal: Meal): Meal {
     val mealIndex = Meal.values().indexOfFirst { it == meal }
     return Meal.values()[when (mealIndex) {
-        Meal.values().size-1 -> 0
+        Meal.values().size - 1 -> 0
         else -> mealIndex + 1
     }]
 }
