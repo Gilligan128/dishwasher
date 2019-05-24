@@ -3,23 +3,26 @@ typealias CyclesRan = Int
 fun run(household: HouseholdConstants, days: Int) {
     val runHousehold = dishwasherHouseholdFlow(household)
     var totalHours = 0
-    var maxHours = days*24
-    println("Given Household $household")
-    generateSequence(Pair(0, DishwasherFlowState())) { next ->
-        runHousehold(next.second) }
+    var maxHours = days * 24
+    println("Household=$household")
+    val stats = generateSequence(Pair(Statistics(), DishwasherFlowState())) { next ->
+        runHousehold(next.second)
+    }
         .takeWhile {
-            totalHours+= it.second.currentMeal.hoursBeforeWeDirtyDishes
+            totalHours += it.second.currentMeal.hoursBeforeWeDirtyDishes
             totalHours <= maxHours
         }
-        .forEach {
-            println(it.second)
-        }
+        .map {
+            println("$it")
+            it.first
+        }.fold(Statistics()) { stats, result -> stats.add(result) }
+    println("Cycles=${stats.cycles};Water_Usage=${household.dishwasherWaterUsage.gallonsPerCycle * stats.cycles};Throughput=${stats.dishesCleaned / days}/day")
 }
 
 fun dishwasherFlow(
     household: HouseholdConstants,
     state: DishwasherFlowState
-): Pair<CyclesRan, DishwasherFlowState> {
+): Pair<Statistics, DishwasherFlowState> {
 
     val dishwasherStillRunning: Boolean =
         state.dishwasherRunning && household.hoursPerCycle > state.currentMeal.hoursBeforeWeDirtyDishes.toDouble()
@@ -36,9 +39,11 @@ fun dishwasherFlow(
     }
     val numberOfDishesOnCounter = when {
         dishwasherStillRunning -> queuedDishes
+        dishwasherFinished -> Math.max(
+            0, queuedDishes - household.dishwasherDishCapacity
+        )
         else -> Math.max(
-            0,
-            state.numberOfDishesInWasher + queuedDishes - household.dishwasherDishCapacity
+            0, state.numberOfDishesInWasher + queuedDishes - household.dishwasherDishCapacity
         )
     }
 
@@ -49,7 +54,11 @@ fun dishwasherFlow(
     val nextMeal = getNextMeal(state.currentMeal)
 
     return Pair(
-        if (dishwasherFinished) 1 else 0, DishwasherFlowState(
+        Statistics(
+            cycles = if (dishwasherFinished) 1 else 0,
+            dishesCleaned = if (dishwasherFinished) state.numberOfDishesInWasher else 0
+        )
+        , DishwasherFlowState(
             numberOfDishesInWasher = numberOfDishesInWasher,
             numberOfDishesOnCounter = numberOfDishesOnCounter,
             dishwasherRunning = dishwasherStillRunning || shouldStartDishwasher,
