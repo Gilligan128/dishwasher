@@ -19,7 +19,7 @@ internal class DishwasherFlowTest : FeatureSpec({
             result.second.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
         }
 
-        scenario("only queues dishes into washer up to capacity") {
+        scenario("only queues dishes into washer up to capacity when it is idle") {
             val dishesOverCapacity = 3
             val stateInput =
                 DishwasherFlowState(numberOfDishesInWasher = householdInput.dishwasherDishCapacity - householdInput.numberOfDishesPerMeal + dishesOverCapacity)
@@ -28,6 +28,16 @@ internal class DishwasherFlowTest : FeatureSpec({
 
             result.second.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
             result.second.numberOfDishesOnCounter shouldBe dishesOverCapacity
+        }
+
+        scenario("only queues dishes into washer up to capacity when it finishes") {
+            val tailoredHousehold =
+                dishesPerMealAreLessThanDishwasherCapacity(dishwasherFinishesAfterAnyMeal(householdInput))
+
+            val stateInput = DishwasherFlowState(dishwasherRunning = true, numberOfDishesOnCounter = tailoredHousehold.dishwasherDishCapacity)
+            val result = dishwasherHouseholdFlow(tailoredHousehold)(stateInput)
+
+            result.second.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
         }
     }
 
@@ -49,7 +59,7 @@ internal class DishwasherFlowTest : FeatureSpec({
         scenario("dishwasher stops running if enough time has passed and the run threshold has not been reached") {
 
             forAll(
-                Gen.bind(HouseholdGenerator(), dishwasherWillNotStartRightAfterItFinishes())
+                Gen.bind(HouseholdGenerator(), ::dishwasherWillNotStartRightAfterItFinishes)
             ) { householdInput: HouseholdConstants ->
                 val sut = dishwasherHouseholdFlow(householdInput)
                 val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal)
@@ -106,7 +116,7 @@ internal class DishwasherFlowTest : FeatureSpec({
             forAll(
                 Gen.bind(
                     HouseholdGenerator(),
-                    dishesPerMealAreLessThanDishwasherCapacity()
+                    ::dishesPerMealAreLessThanDishwasherCapacity
                 )
             ) { arbitraryHousehold: HouseholdConstants ->
                 val sut = dishwasherHouseholdFlow(arbitraryHousehold)
@@ -234,8 +244,8 @@ private fun arbitraryHousehold(): HouseholdConstants {
     return HouseholdGenerator().random().first()
 }
 
-private fun dishwasherWillNotStartRightAfterItFinishes(): (HouseholdConstants) -> HouseholdConstants = {
-    it.copy(
+private fun dishwasherWillNotStartRightAfterItFinishes(it: HouseholdConstants): HouseholdConstants {
+    return it.copy(
         hoursPerCycle = (shortestTimeBetweenMeals() - 1).toDouble(),
         numberOfDishesPerMeal = 1,
         dishwasherDishCapacity = 2,
@@ -243,14 +253,13 @@ private fun dishwasherWillNotStartRightAfterItFinishes(): (HouseholdConstants) -
     )
 }
 
-private fun dishesPerMealAreLessThanDishwasherCapacity(): (HouseholdConstants) -> HouseholdConstants {
-    return {
-        it.copy(
-            numberOfDishesPerMeal = Math.min(
-                it.numberOfDishesPerMeal,
-                it.dishwasherDishCapacity - 1
-            )
+private fun dishesPerMealAreLessThanDishwasherCapacity(household: HouseholdConstants): HouseholdConstants {
+    return household.copy(
+        numberOfDishesPerMeal = Math.min(
+            household.numberOfDishesPerMeal,
+            household.dishwasherDishCapacity - 1
         )
-    }
+    )
+
 }
 
