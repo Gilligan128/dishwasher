@@ -69,19 +69,45 @@ fun dishwasherFlow(
 
 
 fun dishwasherFlow2(
-    household: HouseholdConstants,
     state: FlowState,
-    transitionFromFinished: () -> Pair<Int, FlowState>,
-    transitionFromRunning: () -> Pair<Int, FlowState>,
-    transitionFromMeal: () -> Pair<Int, FlowState>
-): Pair<Int, FlowState> {
+    transitionFromFinished: (FlowState.DishwasherFinished) -> Pair<Statistics, FlowState>,
+    transitionFromRunning: (FlowState.DishwasherRunning) -> Pair<Statistics, FlowState>,
+    transitionFromMeal: (FlowState.MealTime) -> Pair<Statistics, FlowState>,
+    transitionFromStopped: () -> Pair<Statistics, FlowState>
+): Pair<Statistics, FlowState> {
     return when (state) {
-        is FlowState.DishwasherFinished -> transitionFromFinished()
-        is FlowState.DishwasherRunning -> transitionFromRunning()
-        is FlowState.MealTime -> transitionFromMeal()
+        is FlowState.DishwasherFinished -> transitionFromFinished(state)
+        is FlowState.DishwasherRunning -> transitionFromRunning(state)
+        is FlowState.MealTime -> transitionFromMeal(state)
+        FlowState.Stopped -> transitionFromStopped()
     }
 }
 
+
+fun transitionFromFinished(
+    household: HouseholdConstants,
+    state: FlowState.DishwasherFinished
+): Pair<Statistics, FlowState> {
+    return Pair(Statistics(), FlowState.Stopped)
+}
+
+fun transitionFromRunning(
+    household: HouseholdConstants,
+    stateInput: FlowState.DishwasherRunning
+): Pair<Statistics, FlowState> {
+    return Pair(Statistics(0, stateInput.dishesInWasher), FlowState.Stopped)
+}
+
+fun transitionFromMealTime(household: HouseholdConstants, stateInput: FlowState.MealTime): Pair<Statistics, FlowState> {
+    return Pair(
+        Statistics(),
+        FlowState.MealTime(
+            dishesInWasher = household.numberOfDishesPerMeal,
+            dishesOnCounter = 0,
+            currentMeal = Meal.Breakfast
+        )
+    )
+}
 
 fun dishwasherHouseholdFlow(household: HouseholdConstants) =
     { state: DishwasherFlowState -> dishwasherFlow(household, state) }
