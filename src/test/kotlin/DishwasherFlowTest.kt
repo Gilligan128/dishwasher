@@ -17,24 +17,35 @@ internal class DishwasherFlowTest : FeatureSpec({
             val result = sut(stateInput)
 
             result.second.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
+            (result.second.dishwasherState is DishwasherState2.Idle) shouldBe true
+            (result.second.dishwasherState as DishwasherState2.Idle).dishesInWasher shouldBe householdInput.numberOfDishesPerMeal
         }
 
         scenario("only queues dishes into washer up to capacity when it is idle") {
             val dishesOverCapacity = 3
             val stateInput =
-                DishwasherFlowState(numberOfDishesInWasher = householdInput.dishwasherDishCapacity - householdInput.numberOfDishesPerMeal + dishesOverCapacity)
+                DishwasherFlowState(
+                    dishwasherState = DishwasherState2.Idle(dishesInWasher = householdInput.dishwasherDishCapacity - householdInput.numberOfDishesPerMeal + dishesOverCapacity)
+                )
 
             val result = sut(stateInput)
 
             result.second.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
             result.second.numberOfDishesOnCounter shouldBe dishesOverCapacity
+            (result.second.dishwasherState is DishwasherState2.Running) shouldBe true
+            val realState = result.second.dishwasherState as DishwasherState2.Running
+            realState.dishesInWasher shouldBe householdInput.dishwasherDishCapacity
+            realState.dishesOnCounter shouldBe dishesOverCapacity
         }
 
         scenario("only queues dishes into washer up to capacity when it finishes") {
             val tailoredHousehold =
                 dishesPerMealAreLessThanDishwasherCapacity(dishwasherFinishesAfterAnyMeal(householdInput))
 
-            val stateInput = DishwasherFlowState(dishwasherRunning = true, numberOfDishesOnCounter = tailoredHousehold.dishwasherDishCapacity)
+            val stateInput = DishwasherFlowState(
+                dishwasherRunning = true,
+                numberOfDishesOnCounter = tailoredHousehold.dishwasherDishCapacity
+            )
             val result = dishwasherHouseholdFlow(tailoredHousehold)(stateInput)
 
             result.second.numberOfDishesInWasher shouldBe householdInput.dishwasherDishCapacity
@@ -47,7 +58,18 @@ internal class DishwasherFlowTest : FeatureSpec({
             val householdInput =
                 arbitraryHousehold().copy(hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes + 1).toDouble())
             val sut = dishwasherHouseholdFlow(householdInput)
-            val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal, numberOfDishesInWasher = 3)
+            val stateInput =
+                DishwasherFlowState(
+                    dishwasherRunning = true,
+                    currentMeal = currentMeal,
+                    numberOfDishesInWasher = 3,
+                    dishwasherState = DishwasherState2.Running(
+                        0,
+                        3,
+                        currentMeal.hoursBeforeWeDirtyDishes + 1.0,
+                        meal = currentMeal
+                    )
+                )
 
             val result = sut(stateInput)
 
@@ -82,7 +104,10 @@ internal class DishwasherFlowTest : FeatureSpec({
                     Math.round(householdInput.dishwasherDishCapacity * householdInput.dishwasherUtilizationPercent)
                         .toInt()
                 val stateInput =
-                    DishwasherFlowState(numberOfDishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal)
+                    DishwasherFlowState(
+                        numberOfDishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal,
+                        dishwasherState = DishwasherState2.Idle(dishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal)
+                    )
 
                 val result = sut(stateInput)
 
