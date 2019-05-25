@@ -23,28 +23,34 @@ fun dishwasherFlow(
 ): Pair<Statistics, DishwasherFlowState> {
 
     val dishwasherState = when {
+        state.dishwasherState is DishwasherState2.Running && state.dishwasherState.hoursLeftToRun > state.dishwasherState.meal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running
         state.dishwasherRunning && household.hoursPerCycle > state.currentMeal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running
         state.dishwasherRunning -> DishwasherState.Finished
         else -> DishwasherState.Idle
     }
 
-    val queuedDishes = when( state.dishwasherState) {
-        is DishwasherState2.Running -> state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
+    val queuedDishes = when (state.dishwasherState) {
+        is DishwasherState2.Running -> state.dishwasherState.dishesOnCounter + household.numberOfDishesPerMeal
         is DishwasherState2.Idle -> state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
         is DishwasherState2.Finished -> state.dishwasherState.dishesOnCounter + household.numberOfDishesPerMeal
     }
     val previousDishesInWasher = when (state.dishwasherState) {
         is DishwasherState2.Idle -> state.dishwasherState.dishesInWasher
-        is DishwasherState2.Running -> state.numberOfDishesInWasher
+        is DishwasherState2.Running -> state.dishwasherState.dishesInWasher
         is DishwasherState2.Finished -> 0
     }
     val numberOfDishesInWasher =
-        calculateNumberOfDishesInWasher(
-            dishwasherState,
-            queuedDishes,
-            previousDishesInWasher,
-            household.dishwasherDishCapacity
-        )
+        when {
+            state.dishwasherState is DishwasherState2.Finished -> minOf(
+                queuedDishes,
+                household.dishwasherDishCapacity
+            )
+            state.dishwasherState is DishwasherState2.Running -> previousDishesInWasher
+            else -> minOf(
+                household.dishwasherDishCapacity,
+                previousDishesInWasher + queuedDishes
+            )
+        }
     val numberOfDishesOnCounter = calculateDishesOnCounter(
         dishwasherState,
         queuedDishes,
@@ -68,12 +74,16 @@ fun dishwasherFlow(
             numberOfDishesOnCounter = numberOfDishesOnCounter,
             dishwasherRunning = dishwasherState == DishwasherState.Running || shouldStartDishwasher,
             currentMeal = nextMeal,
-            dishwasherState = if (shouldStartDishwasher) DishwasherState2.Running(
-                dishesOnCounter = numberOfDishesOnCounter,
-                dishesInWasher = numberOfDishesInWasher,
-                meal = Meal.Breakfast,
-                hoursLeftToRun = 0.0
-            ) else DishwasherState2.Idle(numberOfDishesInWasher)
+            dishwasherState = when {
+                dishwasherState == DishwasherState.Running || shouldStartDishwasher -> DishwasherState2.Running(
+                    dishesOnCounter = numberOfDishesOnCounter,
+                    dishesInWasher = numberOfDishesInWasher,
+                    meal = Meal.Breakfast,
+                    hoursLeftToRun = 0.0
+                )
+                dishwasherState == DishwasherState.Finished -> DishwasherState2.Finished(numberOfDishesOnCounter, nextMeal)
+                else -> DishwasherState2.Idle(numberOfDishesInWasher)
+            }
         )
     )
 }
@@ -91,22 +101,6 @@ private fun calculateDishesOnCounter(
         )
         else -> maxOf(
             0, previousDishesInWasher + queuedDishes - capacity
-        )
-    }
-}
-
-private fun calculateNumberOfDishesInWasher(
-    dishwasherState: DishwasherState,
-    queuedDishes: Int,
-    previousDishesInWasher: Int,
-    capacity: Int
-): Int {
-    return when (dishwasherState) {
-        DishwasherState.Finished -> minOf(queuedDishes, capacity)
-        DishwasherState.Running -> previousDishesInWasher
-        else -> minOf(
-            capacity,
-            previousDishesInWasher + queuedDishes
         )
     }
 }
