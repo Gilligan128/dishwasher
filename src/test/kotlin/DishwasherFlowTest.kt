@@ -47,7 +47,7 @@ internal class DishwasherFlowTest : FeatureSpec({
             val householdInput =
                 arbitraryHousehold().copy(hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes + 1).toDouble())
             val sut = dishwasherHouseholdFlow(householdInput)
-            val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal)
+            val stateInput = DishwasherFlowState(dishwasherRunning = true, currentMeal = currentMeal, numberOfDishesInWasher = 3)
 
             val result = sut(stateInput)
 
@@ -67,8 +67,8 @@ internal class DishwasherFlowTest : FeatureSpec({
                 val result = sut(stateInput)
 
                 result.second.dishwasherRunning shouldBe false
-                result.first.cycles shouldBe 1
                 result.first.dishesCleaned shouldBe 0
+                result.first.cycles shouldBe 0
                 result.second.numberOfDishesInWasher shouldBe householdInput.numberOfDishesPerMeal
                 true
             }
@@ -86,7 +86,7 @@ internal class DishwasherFlowTest : FeatureSpec({
 
                 val result = sut(stateInput)
 
-                result.first.cycles shouldBe 0
+                result.first.cycles shouldBe 1
                 result.second.dishwasherRunning shouldBe true
                 true
             }
