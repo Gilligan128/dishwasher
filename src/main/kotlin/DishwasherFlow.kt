@@ -108,7 +108,10 @@ fun transitionFromRunning(
     household: HouseholdConstants,
     stateInput: FlowState.DishwasherRunning
 ): Pair<Statistics, FlowState> {
-    return Pair(Statistics(0, stateInput.dishesInWasher), FlowState.Stopped)
+    return Pair(
+        Statistics(0, stateInput.dishesInWasher),
+        FlowState.DishwasherFinished(dishesOnCounter = stateInput.dishesOnCounter, currentMeal = stateInput.currentMeal)
+    )
 }
 
 fun transitionFromMealTime(household: HouseholdConstants, stateInput: FlowState.MealTime): Pair<Statistics, FlowState> {

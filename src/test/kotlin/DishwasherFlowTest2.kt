@@ -63,6 +63,14 @@ class DishwasherFlowTest2 : FeatureSpec({
             }
         }
 
+
+    }
+
+    feature("dishwasher run threshold") {
+        val dishwasherCapacity = 50
+        val dishwasherUtilization = .5
+        val runThreshold = (dishwasherCapacity * dishwasherUtilization).toInt()
+
         scenario("when dishwasher finishes and queued dishes are under run threshold then its is meal time") {
             val household = HouseholdConstants(numberOfDishesPerMeal = 1, dishwasherDishCapacity = 10)
             val stateInput =
@@ -76,10 +84,7 @@ class DishwasherFlowTest2 : FeatureSpec({
             actualstate.currentMeal shouldBe getNextMeal(stateInput.currentMeal)
         }
 
-        scenario("when dishwasher finishes and dishes on counter over the run threshold then the dishwasher runs") {
-            val dishwasherCapacity = 50
-            val dishwasherUtilization = .5
-            val runThreshold = (dishwasherCapacity * dishwasherUtilization).toInt()
+        scenario("given dishes on counter over the run threshold when the washer finishes then the it runs again") {
             forAll(
                 Gen.choose(runThreshold, dishwasherCapacity),
                 Gen.enum<Meal>()
@@ -103,11 +108,8 @@ class DishwasherFlowTest2 : FeatureSpec({
         }
 
         scenario("when its meal time and dishes reach the run threshold then the dishwasher runs") {
-            val dishwasherCapacity = 50
-            val dishwasherUtilization = .5
-            val runThreshold = (dishwasherCapacity * dishwasherUtilization).toInt()
             forAll(
-                Gen.choose(runThreshold, dishwasherCapacity-3),
+                Gen.choose(runThreshold, dishwasherCapacity - 3),
                 Gen.choose(0, 2),
                 Gen.enum<Meal>()
             ) { dishesOnCounter, dishesInWasher, meal ->
@@ -135,6 +137,31 @@ class DishwasherFlowTest2 : FeatureSpec({
         }
     }
 
+    feature("dishwasher timing vs meals") {
+        scenario("given dishwasher is faster than current meal when dishwasher is running then dishwasher finishes") {
+            forAll(Gen.enum<Meal>(), Gen.numericDoubles(1.0, shortestTimeBetweenMeals())) { meal, hoursPerCycle ->
+                val houshold = HouseholdConstants(hoursPerCycle = hoursPerCycle)
+                val stateInput = FlowState.DishwasherRunning(
+                    dishesOnCounter = 0, dishesInWasher = 5,
+                    currentMeal = meal
+                )
+                val result = transitionFromRunning(houshold, stateInput)
+
+                (result.second is FlowState.DishwasherFinished) shouldBe true
+                (result.second as FlowState.DishwasherFinished).currentMeal shouldBe meal
+                true
+            }
+        }
+    }
 })
+
+private fun longestTimeBetweenMeals(): Double = Meal.values().map { it.hoursBeforeWeDirtyDishes }.max()!!.toDouble()
+
+private fun shortestTimeBetweenMeals(): Double {
+    return Meal.values().map { it.hoursBeforeWeDirtyDishes }.min()!!.toDouble()
+}
+
+
+
 
 
