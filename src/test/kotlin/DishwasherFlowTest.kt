@@ -3,8 +3,7 @@ import io.kotlintest.properties.forAll
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FeatureSpec
 
-//The goal is have an arbitrary valid household state, then change the flow state for each scenario.
-//If setting up flow state is hard then I messed up the flow state design.
+
 internal class DishwasherFlowTest : FeatureSpec({
 
     feature("dirty dishes") {
@@ -134,43 +133,44 @@ internal class DishwasherFlowTest : FeatureSpec({
                     ::dishwasherRunsThroughAnyMeal
                 )
             ) { scenarioHouseholdInput: HouseholdConstants ->
-                val stateInput = DishwasherFlowState(dishwasherRunning = true)
+                val currentMeal = Meal.Breakfast
+                val dishwasherState = DishwasherState2.Running(
+                    dishesInWasher = 0,
+                    dishesOnCounter = 0,
+                    hoursLeftToRun = currentMeal.hoursBeforeWeDirtyDishes + 1.0,
+                    meal = currentMeal
+                )
+                val stateInput = DishwasherFlowState(dishwasherState = dishwasherState)
 
                 val result = dishwasherHouseholdFlow(scenarioHouseholdInput)(stateInput)
 
-                val assertion = result.second.numberOfDishesOnCounter == scenarioHouseholdInput.numberOfDishesPerMeal
-                if (!assertion)
-                    println("expected: ${scenarioHouseholdInput.numberOfDishesPerMeal}; Actual: ${result.second.numberOfDishesOnCounter}")
-                assertion
-            }
-        }
-
-        scenario("all dishes on counter move to dishwasher when it is idle") {
-            forAll(
-                Gen.bind(
-                    HouseholdGenerator(),
-                    ::dishesPerMealAreLessThanDishwasherCapacity
-                )
-            ) { arbitraryHousehold: HouseholdConstants ->
-                val sut = dishwasherHouseholdFlow(arbitraryHousehold)
-                val stateInput = DishwasherFlowState(numberOfDishesOnCounter = 1)
-
-                val result = sut(stateInput)
-
-                result.second.numberOfDishesInWasher shouldBe stateInput.numberOfDishesOnCounter + arbitraryHousehold.numberOfDishesPerMeal
-                result.second.numberOfDishesOnCounter shouldBe 0
+                (result.second.dishwasherState is DishwasherState2.Running) shouldBe true
+                (result.second.dishwasherState as DishwasherState2.Running).dishesOnCounter shouldBe scenarioHouseholdInput.numberOfDishesPerMeal
                 true
             }
         }
 
+
         scenario("dishes build up on counter while dishwasher runs") {
             forAll(Gen.bind(HouseholdGenerator(), ::dishwasherRunsThroughAnyMeal)) { arbitraryHousehold ->
+                val currentMeal = Meal.Breakfast
+                val dishwasherState = DishwasherState2.Running(
+                    dishesInWasher = 0,
+                    dishesOnCounter = 5,
+                    hoursLeftToRun = currentMeal.hoursBeforeWeDirtyDishes + 1.0,
+                    meal = currentMeal
+                )
                 val sut = dishwasherHouseholdFlow(arbitraryHousehold)
-                val stateInput = DishwasherFlowState(numberOfDishesOnCounter = 5, dishwasherRunning = true)
+                val stateInput = DishwasherFlowState(
+                    numberOfDishesOnCounter = 5,
+                    dishwasherRunning = true,
+                    dishwasherState = dishwasherState
+                )
 
                 val result = sut(stateInput)
-                result.second.numberOfDishesOnCounter shouldBe stateInput.numberOfDishesOnCounter + arbitraryHousehold.numberOfDishesPerMeal
 
+                (result.second.dishwasherState is DishwasherState2.Running) shouldBe true
+                (result.second.dishwasherState as DishwasherState2.Running).dishesOnCounter shouldBe arbitraryHousehold.numberOfDishesPerMeal + dishwasherState.dishesOnCounter
                 true
             }
         }
