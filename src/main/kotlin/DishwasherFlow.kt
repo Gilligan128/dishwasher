@@ -22,9 +22,10 @@ fun dishwasherFlow(
     state: DishwasherState
 ): Pair<Statistics, DishwasherState> {
     val nextMeal = getNextMeal(state.meal)
+    val runThreshold = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt()
 
     if (state is DishwasherState.Running) {
-        return  Pair(
+        return Pair(
             Statistics(), when {
                 state.hoursLeftToRun > state.meal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running(
                     dishesOnCounter = state.dishesOnCounter + household.numberOfDishesPerMeal,
@@ -37,6 +38,25 @@ fun dishwasherFlow(
                 )
             }
         )
+    } else if (state is DishwasherState.Finished) {
+        val dishesInWasher = minOf(
+            state.dishesOnCounter + household.numberOfDishesPerMeal,
+            household.dishwasherDishCapacity
+        )
+        return when {
+            runThreshold <= dishesInWasher -> Pair(
+                Statistics(cycles = 1, dishesCleaned = dishesInWasher), DishwasherState.Running(
+                    dishesOnCounter = maxOf(
+                        0,
+                        state.dishesOnCounter + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
+                    ),
+                    dishesInWasher = dishesInWasher,
+                    hoursLeftToRun = household.hoursPerCycle,
+                    meal = nextMeal
+                )
+            )
+            else -> Pair(Statistics(), DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = nextMeal))
+        }
     }
 
     val queuedDishes = when (state) {
@@ -71,7 +91,6 @@ fun dishwasherFlow(
         )
     }
 
-    val runThreshold = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt()
     val runThresholdReached = numberOfDishesInWasher >= runThreshold
     val shouldStartDishwasher = when (state) {
         is DishwasherState.Running -> false
