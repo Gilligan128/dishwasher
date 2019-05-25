@@ -51,12 +51,15 @@ fun dishwasherFlow(
                 previousDishesInWasher + queuedDishes
             )
         }
-    val numberOfDishesOnCounter = calculateDishesOnCounter(
-        dishwasherState,
-        queuedDishes,
-        previousDishesInWasher,
-        household.dishwasherDishCapacity
-    )
+    val numberOfDishesOnCounter = when (dishwasherState) {
+        DishwasherState.Running -> queuedDishes
+        DishwasherState.Finished -> maxOf(
+            0, queuedDishes - household.dishwasherDishCapacity
+        )
+        else -> maxOf(
+            0, previousDishesInWasher + queuedDishes - household.dishwasherDishCapacity
+        )
+    }
 
     val runThreshold = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt()
     val runThresholdReached = numberOfDishesInWasher >= runThreshold
@@ -68,7 +71,7 @@ fun dishwasherFlow(
         state.dishwasherState is DishwasherState2.Running && state.dishwasherState.hoursLeftToRun > state.dishwasherState.meal.hoursBeforeWeDirtyDishes.toDouble() || shouldStartDishwasher -> DishwasherState2.Running(
             dishesOnCounter = numberOfDishesOnCounter,
             dishesInWasher = numberOfDishesInWasher,
-            meal = Meal.Breakfast,
+            meal = nextMeal,
             hoursLeftToRun = 0.0
         )
         state.dishwasherState is DishwasherState2.Running -> DishwasherState2.Finished(numberOfDishesOnCounter, nextMeal)
@@ -87,23 +90,6 @@ fun dishwasherFlow(
             dishwasherState = dishwasherState2
         )
     )
-}
-
-private fun calculateDishesOnCounter(
-    dishwasherState: DishwasherState,
-    queuedDishes: Int,
-    previousDishesInWasher: Int,
-    capacity: Int
-): Int {
-    return when (dishwasherState) {
-        DishwasherState.Running -> queuedDishes
-        DishwasherState.Finished -> maxOf(
-            0, queuedDishes - capacity
-        )
-        else -> maxOf(
-            0, previousDishesInWasher + queuedDishes - capacity
-        )
-    }
 }
 
 enum class DishwasherState {
