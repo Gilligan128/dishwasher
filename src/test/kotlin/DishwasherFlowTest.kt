@@ -43,8 +43,6 @@ internal class DishwasherFlowTest : FeatureSpec({
                 dishesPerMealAreLessThanDishwasherCapacity(dishwasherFinishesAfterAnyMeal(householdInput))
 
             val stateInput = DishwasherFlowState(
-                dishwasherRunning = true,
-                numberOfDishesOnCounter = tailoredHousehold.dishwasherDishCapacity,
                 dishwasherState = DishwasherState2.Finished(tailoredHousehold.dishwasherDishCapacity, meal = Meal.Breakfast)
             )
             val result = dishwasherHouseholdFlow(tailoredHousehold)(stateInput)

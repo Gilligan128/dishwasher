@@ -28,11 +28,15 @@ fun dishwasherFlow(
         else -> DishwasherState.Idle
     }
 
-    val queuedDishes = state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
+    val queuedDishes = when( state.dishwasherState) {
+        is DishwasherState2.Running -> state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
+        is DishwasherState2.Idle -> state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
+        is DishwasherState2.Finished -> state.dishwasherState.dishesOnCounter + household.numberOfDishesPerMeal
+    }
     val previousDishesInWasher = when (state.dishwasherState) {
         is DishwasherState2.Idle -> state.dishwasherState.dishesInWasher
         is DishwasherState2.Running -> state.numberOfDishesInWasher
-        is DishwasherState2.Finished -> state.numberOfDishesInWasher
+        is DishwasherState2.Finished -> 0
     }
     val numberOfDishesInWasher =
         calculateNumberOfDishesInWasher(
