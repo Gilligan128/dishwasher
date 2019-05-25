@@ -1,4 +1,3 @@
-typealias CyclesRan = Int
 
 fun run(household: HouseholdConstants, days: Int) {
     val runHousehold = dishwasherHouseholdFlow(household)
@@ -30,10 +29,6 @@ fun dishwasherFlow(
         else -> DishwasherState.Idle
     }
 
-    val dishwasherStillRunning: Boolean =
-        state.dishwasherRunning && household.hoursPerCycle > state.currentMeal.hoursBeforeWeDirtyDishes.toDouble()
-    val dishwasherFinished = state.dishwasherRunning && !dishwasherStillRunning
-
     val queuedDishes = state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
     val numberOfDishesInWasher =
         calculateNumberOfDishesInWasher(
@@ -42,40 +37,48 @@ fun dishwasherFlow(
             state.numberOfDishesInWasher,
             household.dishwasherDishCapacity
         )
-    val numberOfDishesOnCounter = when {
-        dishwasherStillRunning -> queuedDishes
-        dishwasherFinished -> maxOf(
-            0, queuedDishes - household.dishwasherDishCapacity
-        )
-        else -> maxOf(
-            0, state.numberOfDishesInWasher + queuedDishes - household.dishwasherDishCapacity
-        )
-    }
+    val numberOfDishesOnCounter = calculateDishesOnCounter(
+        dishwasherState,
+        queuedDishes,
+        state.numberOfDishesInWasher,
+        household.dishwasherDishCapacity
+    )
 
     val runThreshold = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt()
     val runThresholdReached = numberOfDishesInWasher >= runThreshold
-    val shouldStartDishwasher = runThresholdReached && !dishwasherStillRunning
+    val shouldStartDishwasher = runThresholdReached && dishwasherState != DishwasherState.Running
 
     val nextMeal = getNextMeal(state.currentMeal)
 
     return Pair(
         Statistics(
             cycles = if (shouldStartDishwasher) 1 else 0,
-            dishesCleaned = if (dishwasherFinished) state.numberOfDishesInWasher else 0
+            dishesCleaned = if (dishwasherState == DishwasherState.Finished) state.numberOfDishesInWasher else 0
         )
         , DishwasherFlowState(
             numberOfDishesInWasher = numberOfDishesInWasher,
             numberOfDishesOnCounter = numberOfDishesOnCounter,
-            dishwasherRunning = dishwasherStillRunning || shouldStartDishwasher,
+            dishwasherRunning = dishwasherState == DishwasherState.Running || shouldStartDishwasher,
             currentMeal = nextMeal
         )
     )
 }
 
-enum class DishwasherState {
-    Finished,
-    Running,
-    Idle
+private fun calculateDishesOnCounter(
+    dishwasherState: DishwasherState,
+    queuedDishes: Int,
+    previousDishesInWasher: Int,
+    capacity: Int
+): Int {
+    return when (dishwasherState) {
+        DishwasherState.Running -> queuedDishes
+        DishwasherState.Finished -> maxOf(
+            0, queuedDishes - capacity
+        )
+        else -> maxOf(
+            0, previousDishesInWasher + queuedDishes - capacity
+        )
+    }
 }
 
 private fun calculateNumberOfDishesInWasher(
@@ -94,6 +97,11 @@ private fun calculateNumberOfDishesInWasher(
     }
 }
 
+enum class DishwasherState {
+    Finished,
+    Running,
+    Idle
+}
 
 fun dishwasherHouseholdFlow(household: HouseholdConstants) =
     { state: DishwasherFlowState -> dishwasherFlow(household, state) }
