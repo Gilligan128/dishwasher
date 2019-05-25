@@ -102,7 +102,7 @@ fun transitionFromMealTime(household: HouseholdConstants, stateInput: FlowState.
     return Pair(
         Statistics(),
         FlowState.MealTime(
-            dishesInWasher = stateInput.dishesInWasher + household.numberOfDishesPerMeal,
+            dishesInWasher = household.numberOfDishesPerMeal,
             dishesOnCounter = 0,
             currentMeal = Meal.Breakfast
         )
