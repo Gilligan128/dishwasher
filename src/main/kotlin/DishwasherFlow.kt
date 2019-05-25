@@ -56,8 +56,7 @@ fun dishwasherFlow(
     return Pair(
         Statistics(
             cycles = if (dishwasherFinished) 1 else 0,
-            dishesCleaned = if (dishwasherFinished) state.numberOfDishesInWasher else 0,
-            hoursPassed = 0
+            dishesCleaned = if (dishwasherFinished) state.numberOfDishesInWasher else 0
         )
         , DishwasherFlowState(
             numberOfDishesInWasher = numberOfDishesInWasher,
@@ -68,50 +67,19 @@ fun dishwasherFlow(
     )
 }
 
-fun run2Composed(household: HouseholdConstants, days: Int) {
-    val transitionComposed = { state: FlowState ->
-        dishwasherFlow2(
-            state,
-            { transitionFromFinished(household, it) },
-            { transitionFromRunning(household, it) },
-            { transitionFromMealTime(household, it) })
-    }
-    run2(household, days, transitionComposed)
-}
-
-fun run2(
-    household: HouseholdConstants,
-    days: Int,
-    transition: (FlowState) -> Pair<Statistics, FlowState>
-) {
-    var totalHours = 0
-    var maxHours = days * 24
-    println("Household=$household")
-    val stats = generateSequence(Pair(Statistics(), FlowState.MealTime() as FlowState)) { next ->
-        transition(next.second)
-    }
-        .takeWhile {
-            totalHours += it.first.hoursPassed
-            totalHours <= maxHours
-        }
-        .map {
-            println("$it")
-            it.first
-        }.fold(Statistics()) { stats, result -> stats.add(result) }
-    println("Cycles=${stats.cycles};Water_Usage=${household.dishwasherWaterUsage.gallonsPerCycle * stats.cycles};Throughput=${stats.dishesCleaned / days}/day")
-}
 
 fun dishwasherFlow2(
     state: FlowState,
     transitionFromFinished: (FlowState.DishwasherFinished) -> Pair<Statistics, FlowState>,
     transitionFromRunning: (FlowState.DishwasherRunning) -> Pair<Statistics, FlowState>,
-    transitionFromMeal: (FlowState.MealTime) -> Pair<Statistics, FlowState>
+    transitionFromMeal: (FlowState.MealTime) -> Pair<Statistics, FlowState>,
+    transitionFromStopped: () -> Pair<Statistics, FlowState>
 ): Pair<Statistics, FlowState> {
     return when (state) {
         is FlowState.DishwasherFinished -> transitionFromFinished(state)
         is FlowState.DishwasherRunning -> transitionFromRunning(state)
         is FlowState.MealTime -> transitionFromMeal(state)
-        FlowState.Stopped -> Pair(Statistics(), FlowState.Stopped)
+        FlowState.Stopped -> transitionFromStopped()
     }
 }
 
@@ -141,19 +109,8 @@ fun transitionFromRunning(
     stateInput: FlowState.DishwasherRunning
 ): Pair<Statistics, FlowState> {
     return Pair(
-        Statistics(0, stateInput.dishesInWasher,0),
-        when {
-            household.hoursPerCycle > stateInput.currentMeal.hoursBeforeWeDirtyDishes -> FlowState.MealTime(
-                dishesOnCounter = stateInput.dishesOnCounter,
-                dishesInWasher = stateInput.dishesInWasher,
-                currentMeal = stateInput.currentMeal
-            )
-            else -> FlowState.DishwasherFinished(
-                dishesOnCounter = stateInput.dishesOnCounter,
-                currentMeal = stateInput.currentMeal
-            )
-        }
-
+        Statistics(0, stateInput.dishesInWasher),
+        FlowState.DishwasherFinished(dishesOnCounter = stateInput.dishesOnCounter, currentMeal = stateInput.currentMeal)
     )
 }
 
@@ -175,12 +132,11 @@ fun transitionFromMealTime(household: HouseholdConstants, stateInput: FlowState.
                     stateInput.dishesInWasher + household.numberOfDishesPerMeal
                 ),
                 dishesOnCounter = 0,
-                currentMeal = stateInput.currentMeal.next()
+                currentMeal = Meal.Breakfast
             )
         }
     )
 }
-
 
 fun dishwasherHouseholdFlow(household: HouseholdConstants) =
     { state: DishwasherFlowState -> dishwasherFlow(household, state) }
@@ -191,10 +147,6 @@ fun getNextMeal(meal: Meal): Meal {
         Meal.values().size - 1 -> 0
         else -> mealIndex + 1
     }]
-}
-
-fun Meal.next(): Meal {
-    return getNextMeal(this)
 }
 
 fun HouseholdConstants.runThreshold(): Double {
