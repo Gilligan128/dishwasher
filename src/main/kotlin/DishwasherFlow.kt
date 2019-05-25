@@ -64,6 +64,16 @@ fun dishwasherFlow(
 
     val nextMeal = getNextMeal(state.currentMeal)
 
+    val dishwasherState2 = when {
+        state.dishwasherState is DishwasherState2.Running && state.dishwasherState.hoursLeftToRun > state.dishwasherState.meal.hoursBeforeWeDirtyDishes.toDouble() || shouldStartDishwasher -> DishwasherState2.Running(
+            dishesOnCounter = numberOfDishesOnCounter,
+            dishesInWasher = numberOfDishesInWasher,
+            meal = Meal.Breakfast,
+            hoursLeftToRun = 0.0
+        )
+        state.dishwasherState is DishwasherState2.Running -> DishwasherState2.Finished(numberOfDishesOnCounter, nextMeal)
+        else -> DishwasherState2.Idle(numberOfDishesInWasher)
+    }
     return Pair(
         Statistics(
             cycles = if (shouldStartDishwasher) 1 else 0,
@@ -74,16 +84,7 @@ fun dishwasherFlow(
             numberOfDishesOnCounter = numberOfDishesOnCounter,
             dishwasherRunning = dishwasherState == DishwasherState.Running || shouldStartDishwasher,
             currentMeal = nextMeal,
-            dishwasherState = when {
-                dishwasherState == DishwasherState.Running || shouldStartDishwasher -> DishwasherState2.Running(
-                    dishesOnCounter = numberOfDishesOnCounter,
-                    dishesInWasher = numberOfDishesInWasher,
-                    meal = Meal.Breakfast,
-                    hoursLeftToRun = 0.0
-                )
-                dishwasherState == DishwasherState.Finished -> DishwasherState2.Finished(numberOfDishesOnCounter, nextMeal)
-                else -> DishwasherState2.Idle(numberOfDishesInWasher)
-            }
+            dishwasherState = dishwasherState2
         )
     )
 }

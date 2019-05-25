@@ -93,8 +93,6 @@ internal class DishwasherFlowTest : FeatureSpec({
                     meal = currentMeal
                 )
                 val stateInput = DishwasherFlowState(
-                    dishwasherRunning = true,
-                    currentMeal = currentMeal,
                     dishwasherState = dishwasherState
                 )
 
