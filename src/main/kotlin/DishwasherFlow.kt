@@ -31,7 +31,7 @@ fun dishwasherFlow(
 
     val queuedDishes = when (state.dishwasherState) {
         is DishwasherState2.Running -> state.dishwasherState.dishesOnCounter + household.numberOfDishesPerMeal
-        is DishwasherState2.Idle -> state.numberOfDishesOnCounter + household.numberOfDishesPerMeal
+        is DishwasherState2.Idle -> household.numberOfDishesPerMeal
         is DishwasherState2.Finished -> state.dishwasherState.dishesOnCounter + household.numberOfDishesPerMeal
     }
     val previousDishesInWasher = when (state.dishwasherState) {
@@ -51,9 +51,9 @@ fun dishwasherFlow(
                 previousDishesInWasher + queuedDishes
             )
         }
-    val numberOfDishesOnCounter = when (dishwasherState) {
-        DishwasherState.Running -> queuedDishes
-        DishwasherState.Finished -> maxOf(
+    val numberOfDishesOnCounter = when (state.dishwasherState) {
+        is DishwasherState2.Running -> queuedDishes
+        is DishwasherState2.Finished -> maxOf(
             0, queuedDishes - household.dishwasherDishCapacity
         )
         else -> maxOf(
@@ -63,7 +63,11 @@ fun dishwasherFlow(
 
     val runThreshold = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt()
     val runThresholdReached = numberOfDishesInWasher >= runThreshold
-    val shouldStartDishwasher = runThresholdReached && dishwasherState != DishwasherState.Running
+    val shouldStartDishwasher = when(state.dishwasherState) {
+        is DishwasherState2.Running -> false
+        is DishwasherState2.Idle -> runThresholdReached
+        is DishwasherState2.Finished -> runThresholdReached
+    }
 
     val nextMeal = getNextMeal(state.currentMeal)
 
@@ -80,12 +84,9 @@ fun dishwasherFlow(
     return Pair(
         Statistics(
             cycles = if (shouldStartDishwasher) 1 else 0,
-            dishesCleaned = if (dishwasherState == DishwasherState.Finished) previousDishesInWasher else 0
+            dishesCleaned = if (state.dishwasherState == DishwasherState.Finished) previousDishesInWasher else 0
         )
         , DishwasherFlowState(
-            numberOfDishesInWasher = numberOfDishesInWasher,
-            numberOfDishesOnCounter = numberOfDishesOnCounter,
-            dishwasherRunning = dishwasherState == DishwasherState.Running || shouldStartDishwasher,
             currentMeal = nextMeal,
             dishwasherState = dishwasherState2
         )
