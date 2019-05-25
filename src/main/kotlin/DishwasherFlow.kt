@@ -88,8 +88,21 @@ fun transitionFromFinished(
     household: HouseholdConstants,
     state: FlowState.DishwasherFinished
 ): Pair<Statistics, FlowState> {
-    return Pair(Statistics(), FlowState.Stopped)
+    val nextState = when {
+        state.dishesOnCounter >= household.runThreshold() -> FlowState.DishwasherRunning(
+            dishesOnCounter = 0,
+            dishesInWasher = state.dishesOnCounter,
+            currentMeal = state.currentMeal
+        )
+        else -> FlowState.MealTime(
+            dishesOnCounter = 0,
+            dishesInWasher = 0,
+            currentMeal = getNextMeal(state.currentMeal)
+        )
+    }
+    return Pair(Statistics(), nextState)
 }
+
 
 fun transitionFromRunning(
     household: HouseholdConstants,
@@ -101,21 +114,38 @@ fun transitionFromRunning(
 fun transitionFromMealTime(household: HouseholdConstants, stateInput: FlowState.MealTime): Pair<Statistics, FlowState> {
     return Pair(
         Statistics(),
-        FlowState.MealTime(
-            dishesInWasher = stateInput.dishesInWasher + household.numberOfDishesPerMeal,
-            dishesOnCounter = 0,
-            currentMeal = Meal.Breakfast
-        )
+        when {
+            stateInput.dishesOnCounter >= household.runThreshold() -> FlowState.DishwasherRunning(
+                dishesInWasher = minOf(
+                    household.dishwasherDishCapacity,
+                    stateInput.dishesOnCounter + stateInput.dishesInWasher + household.numberOfDishesPerMeal
+                ),
+                currentMeal = stateInput.currentMeal,
+                dishesOnCounter = 0
+            )
+            else -> FlowState.MealTime(
+                dishesInWasher = minOf(
+                    household.dishwasherDishCapacity,
+                    stateInput.dishesInWasher + household.numberOfDishesPerMeal
+                ),
+                dishesOnCounter = 0,
+                currentMeal = Meal.Breakfast
+            )
+        }
     )
 }
 
 fun dishwasherHouseholdFlow(household: HouseholdConstants) =
     { state: DishwasherFlowState -> dishwasherFlow(household, state) }
 
-private fun getNextMeal(meal: Meal): Meal {
+fun getNextMeal(meal: Meal): Meal {
     val mealIndex = Meal.values().indexOfFirst { it == meal }
     return Meal.values()[when (mealIndex) {
         Meal.values().size - 1 -> 0
         else -> mealIndex + 1
     }]
+}
+
+fun HouseholdConstants.runThreshold(): Double {
+    return dishwasherDishCapacity * dishwasherUtilizationPercent
 }

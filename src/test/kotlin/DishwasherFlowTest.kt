@@ -212,8 +212,9 @@ internal class DishwasherFlowTest : FeatureSpec({
     }
 
     feature("run simulator") {
-        scenario("simulates 2 days for a random household") {
-            val household = arbitraryHousehold()
+        scenario("simulates 7 days for a random household") {
+            val household = HouseholdConstants(numberOfDishesPerMeal=31, dishwasherUtilizationPercent=0.90, dishwasherDishCapacity=136, dishwasherWaterUsage= DishwasherWaterUsage.EnergyStar, hoursPerCycle=3.5219561476333325)
+
             run(household, 7)
         }
     }
