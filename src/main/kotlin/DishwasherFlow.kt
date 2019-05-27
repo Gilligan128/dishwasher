@@ -1,23 +1,17 @@
 fun run(household: HouseholdConstants, days: Int) {
-    val runHousehold = dishwasherHouseholdFlow(household)
-    var totalHours = 0
-    var maxHours = days * 24
-    println("Household=$household")
-    val stats = generateSequence(Pair(Statistics(), DishwasherState.Idle() as DishwasherState)) { next ->
-        runHousehold(next.second)
+    val transitionComposed = { state: DishwasherState ->
+        val result = transition(
+            state,
+            { runState -> transitionFromRunning(runState, household) },
+            { finishState -> transitionFromFinished(finishState, household) },
+            { idleState -> transitionFromIdle(household, idleState) })
+        println(result)
+        result
     }
-        .takeWhile {
-            totalHours += it.second.meal.hoursBeforeWeDirtyDishes
-            totalHours <= maxHours
-        }
-        .map {
-            println("$it")
-            it.first
-        }.fold(Statistics()) { stats, result -> stats.add(result) }
-    println("Cycles=${stats.cycles};Water_Usage=${household.dishwasherWaterUsage.gallonsPerCycle * stats.cycles};Throughput=${stats.dishesCleaned / days}/day")
+    return run2(household, days, transition = transitionComposed)
 }
 
-fun dishwasherFlow(
+fun dishwasherFlowComposed(
     household: HouseholdConstants,
     state: DishwasherState
 ): Pair<Statistics, DishwasherState> {
@@ -29,7 +23,37 @@ fun dishwasherFlow(
     }
 }
 
-private fun transitionFromIdle(
+fun run2(household: HouseholdConstants, days: Int, transition: (DishwasherState) -> Pair<Statistics, DishwasherState>) {
+    var totalHours = 0
+    var maxHours = days * 24
+    println("Household=$household")
+    val stats = generateSequence(Pair(Statistics(), DishwasherState.Idle() as DishwasherState)) { next ->
+        transition(next.second)
+    }
+        .takeWhile {
+            totalHours += it.second.meal.hoursBeforeWeDirtyDishes
+            totalHours <= maxHours
+        }
+        .map {
+            it.first
+        }.fold(Statistics()) { stats, result -> stats.add(result) }
+    println("Cycles=${stats.cycles};Water_Usage=${household.dishwasherWaterUsage.gallonsPerCycle * stats.cycles};Throughput=${stats.dishesCleaned / days}/day")
+}
+
+fun transition(
+    state: DishwasherState,
+    transitionFromRunning: (DishwasherState.Running) -> Pair<Statistics, DishwasherState>,
+    transitionFromFinished: (DishwasherState.Finished) -> Pair<Statistics, DishwasherState>,
+    transitionFromIdle: (DishwasherState.Idle) -> Pair<Statistics, DishwasherState>
+): Pair<Statistics, DishwasherState> {
+    return when (state) {
+        is DishwasherState.Running -> transitionFromRunning(state)
+        is DishwasherState.Finished -> transitionFromFinished(state)
+        is DishwasherState.Idle -> transitionFromIdle(state)
+    }
+}
+
+fun transitionFromIdle(
     household: HouseholdConstants,
     state: DishwasherState.Idle
 ): Pair<Statistics, DishwasherState> {
@@ -60,7 +84,7 @@ private fun transitionFromIdle(
     }
 }
 
-private fun transitionFromFinished(
+fun transitionFromFinished(
     state: DishwasherState.Finished,
     household: HouseholdConstants
 ): Pair<Statistics, DishwasherState> {
@@ -87,7 +111,7 @@ private fun transitionFromFinished(
     }
 }
 
-private fun transitionFromRunning(
+fun transitionFromRunning(
     state: DishwasherState.Running,
     household: HouseholdConstants
 ): Pair<Statistics, DishwasherState> {
@@ -112,7 +136,7 @@ private fun getRunThreshold(household: HouseholdConstants) =
 
 
 fun dishwasherHouseholdFlow(household: HouseholdConstants) =
-    { state: DishwasherState -> dishwasherFlow(household, state) }
+    { state: DishwasherState -> dishwasherFlowComposed(household, state) }
 
 private fun getNextMeal(meal: Meal): Meal {
     val mealIndex = Meal.values().indexOfFirst { it == meal }

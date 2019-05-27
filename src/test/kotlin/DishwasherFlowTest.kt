@@ -2,6 +2,7 @@ import io.kotlintest.properties.Gen
 import io.kotlintest.properties.forAll
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FeatureSpec
+import kotlin.math.round
 
 
 internal class DishwasherFlowTest : FeatureSpec({
@@ -9,10 +10,9 @@ internal class DishwasherFlowTest : FeatureSpec({
     feature("dirty dishes") {
         val householdInput =
             dishesPerMealAreLessThanDishwasherCapacity(arbitraryHousehold()).copy(dishwasherUtilizationPercent = 1.0)
-        val sut = dishwasherHouseholdFlow(householdInput)
         scenario("queues dishes from meal into dishwasher") {
 
-            val result = sut(DishwasherState.Idle())
+            val result = transitionFromIdle(householdInput, DishwasherState.Idle())
 
             (result.second is DishwasherState.Idle) shouldBe true
             (result.second as DishwasherState.Idle).dishesInWasher shouldBe householdInput.numberOfDishesPerMeal
@@ -24,7 +24,7 @@ internal class DishwasherFlowTest : FeatureSpec({
                 DishwasherState.Idle(dishesInWasher = householdInput.dishwasherDishCapacity - householdInput.numberOfDishesPerMeal + dishesOverCapacity)
 
 
-            val result = sut(dishwasherState)
+            val result = transitionFromIdle(householdInput, dishwasherState)
 
             (result.second is DishwasherState.Running) shouldBe true
             val realState = result.second as DishwasherState.Running
@@ -98,7 +98,7 @@ internal class DishwasherFlowTest : FeatureSpec({
                 val sut = dishwasherHouseholdFlow(householdInput)
 
                 val runThreshold =
-                    Math.round(householdInput.dishwasherDishCapacity * householdInput.dishwasherUtilizationPercent)
+                    round(householdInput.dishwasherDishCapacity * householdInput.dishwasherUtilizationPercent)
                         .toInt()
                 val dishwasherState =
                     DishwasherState.Idle(dishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal)
@@ -175,6 +175,7 @@ internal class DishwasherFlowTest : FeatureSpec({
             run(household, 7)
         }
     }
+
 })
 
 private fun dishwasherFinishesAfterAnyMeal(it: HouseholdConstants) =
@@ -213,7 +214,7 @@ private fun dishwasherWillNotStartRightAfterItFinishes(it: HouseholdConstants): 
 
 private fun dishesPerMealAreLessThanDishwasherCapacity(household: HouseholdConstants): HouseholdConstants {
     return household.copy(
-        numberOfDishesPerMeal = Math.min(
+        numberOfDishesPerMeal = minOf(
             household.numberOfDishesPerMeal,
             household.dishwasherDishCapacity - 1
         )
