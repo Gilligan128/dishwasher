@@ -2,6 +2,10 @@ import io.kotlintest.properties.Gen
 import io.kotlintest.properties.forAll
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.FeatureSpec
+import io.kotlintest.tables.forAll
+import io.kotlintest.tables.headers
+import io.kotlintest.tables.row
+import io.kotlintest.tables.table
 import kotlin.math.round
 
 
@@ -176,6 +180,25 @@ internal class DishwasherFlowTest : FeatureSpec({
         }
     }
 
+    feature("statistics") {
+        scenario("given dishwasher is at capacity when dishwasher is idle then the number of queued dishes is recorded in stats") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                table(
+                    headers("capacity", "dishes per meal", "dishes in washer", "expected queued dishes"),
+                    row(10, 5, 10, 5),
+                    row(10, 5, 9, 4)
+                ).forAll { capacity, dishesPerMeal, dishesInWasher, expectedQueuedDishes ->
+                    val household = HouseholdConstants(dishwasherDishCapacity = capacity, numberOfDishesPerMeal = dishesPerMeal)
+                    val stateInput = DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = meal)
+
+                    val result = transitionFromIdle(household = household, state = stateInput)
+
+                    result.first.dishesQueued shouldBe expectedQueuedDishes
+                }
+                true
+            }
+        }
+    }
 })
 
 private fun dishwasherFinishesAfterAnyMeal(it: HouseholdConstants) =

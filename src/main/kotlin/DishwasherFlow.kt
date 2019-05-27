@@ -27,16 +27,17 @@ fun run2(household: HouseholdConstants, days: Int, transition: (DishwasherState)
     var totalHours = 0
     var maxHours = days * 24
     println("Household=$household")
-    val stats = generateSequence(Pair(Statistics(), DishwasherState.Idle() as DishwasherState)) { next ->
-        transition(next.second)
-    }
-        .takeWhile {
-            totalHours += it.second.meal.hoursBeforeWeDirtyDishes
-            totalHours <= maxHours
+    val stats =
+        generateSequence(Pair(Statistics(dishesQueued = 0), DishwasherState.Idle() as DishwasherState)) { next ->
+            transition(next.second)
         }
-        .map {
-            it.first
-        }.fold(Statistics()) { stats, result -> stats.add(result) }
+            .takeWhile {
+                totalHours += it.second.meal.hoursBeforeWeDirtyDishes
+                totalHours <= maxHours
+            }
+            .map {
+                it.first
+            }.fold(Statistics(dishesQueued = 0)) { stats, result -> stats.add(result) }
     println("Cycles=${stats.cycles};Water_Usage=${household.dishwasherWaterUsage.gallonsPerCycle * stats.cycles};Throughput=${stats.dishesCleaned / days}/day")
 }
 
@@ -62,21 +63,25 @@ fun transitionFromIdle(
         state.dishesInWasher + household.numberOfDishesPerMeal
     )
     return when {
-        dishesInWasher >= getRunThreshold(household) -> Pair(
-            Statistics(
-                cycles = 1,
-                dishesCleaned = dishesInWasher
-            ),
-            DishwasherState.Running(
-                dishesInWasher = dishesInWasher,
-                dishesOnCounter = maxOf(
-                    0,
-                    state.dishesInWasher + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
-                ),
-                meal = getNextMeal(state.meal),
-                hoursLeftToRun = household.hoursPerCycle
+        dishesInWasher >= getRunThreshold(household) -> {
+            val dishesOnCounter = maxOf(
+                0,
+                state.dishesInWasher + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
             )
-        )
+            Pair(
+                Statistics(
+                    cycles = 1,
+                    dishesCleaned = dishesInWasher,
+                    dishesQueued = dishesOnCounter
+                ),
+                DishwasherState.Running(
+                    dishesInWasher = dishesInWasher,
+                    dishesOnCounter = dishesOnCounter,
+                    meal = getNextMeal(state.meal),
+                    hoursLeftToRun = household.hoursPerCycle
+                )
+            )
+        }
         else -> Pair(
             Statistics(),
             DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = getNextMeal(state.meal))
@@ -94,7 +99,7 @@ fun transitionFromFinished(
     )
     return when {
         getRunThreshold(household) <= dishesInWasher -> Pair(
-            Statistics(cycles = 1, dishesCleaned = dishesInWasher), DishwasherState.Running(
+            Statistics(cycles = 1, dishesCleaned = dishesInWasher, dishesQueued = 0), DishwasherState.Running(
                 dishesOnCounter = maxOf(
                     0,
                     state.dishesOnCounter + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
@@ -105,7 +110,7 @@ fun transitionFromFinished(
             )
         )
         else -> Pair(
-            Statistics(),
+            Statistics(dishesQueued = 0),
             DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = getNextMeal(state.meal))
         )
     }
@@ -116,7 +121,7 @@ fun transitionFromRunning(
     household: HouseholdConstants
 ): Pair<Statistics, DishwasherState> {
     return Pair(
-        Statistics(), when {
+        Statistics(dishesQueued = 0), when {
             state.hoursLeftToRun > state.meal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running(
                 dishesOnCounter = state.dishesOnCounter + household.numberOfDishesPerMeal,
                 dishesInWasher = state.dishesInWasher,
