@@ -181,19 +181,68 @@ internal class DishwasherFlowTest : FeatureSpec({
     }
 
     feature("statistics") {
-        scenario("given dishwasher is at capacity when dishwasher is idle then the number of queued dishes is recorded in stats") {
+        val dishesPerMeal = 5
+        val capacity = 10
+        scenario("given dishwasher is at capacity and idle when its meal time then the number of dishes on counter stat is recorded") {
             forAll(Gen.enum<Meal>()) { meal ->
                 table(
-                    headers("capacity", "dishes per meal", "dishes in washer", "expected queued dishes"),
-                    row(10, 5, 10, 5),
-                    row(10, 5, 9, 4)
-                ).forAll { capacity, dishesPerMeal, dishesInWasher, expectedQueuedDishes ->
-                    val household = HouseholdConstants(dishwasherDishCapacity = capacity, numberOfDishesPerMeal = dishesPerMeal)
+                    headers("dishes in washer", "dishes on counter"),
+                    row(capacity, 5),
+                    row(capacity-1, 4)
+                ).forAll { dishesInWasher, dishesOnCounter ->
+                    val household =
+                        HouseholdConstants(numberOfDishesPerMeal = dishesPerMeal, dishwasherDishCapacity = capacity)
                     val stateInput = DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = meal)
 
                     val result = transitionFromIdle(household = household, state = stateInput)
 
-                    result.first.dishesQueued shouldBe expectedQueuedDishes
+                    result.first.dishesOnCounter shouldBe dishesOnCounter
+                }
+                true
+            }
+        }
+
+        scenario("given dishwasher is at capacity and finished when its meal time then the number of dishes on counter stat is recorded") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                table(
+                    headers("dishes already on counter", "expected dishes on counter"),
+                    row(10, 5),
+                    row(9, 4)
+                ).forAll { dishesAlreadyOnCounter, dishesOnCounter ->
+                    val household =
+                        HouseholdConstants(dishwasherDishCapacity = capacity, numberOfDishesPerMeal = dishesPerMeal)
+                    val stateInput = DishwasherState.Finished(dishesOnCounter = dishesAlreadyOnCounter, meal = meal)
+
+                    val result = transitionFromFinished(household = household, state = stateInput)
+
+                    result.first.dishesOnCounter shouldBe dishesOnCounter
+                }
+                true
+            }
+        }
+
+        scenario("given dishwasher is running when its meal time then the number of dishes on counter stat is recorded") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                table(
+                    headers("dishes already on counter", "expected dishes on counter"),
+                    row(0, 5),
+                    row(1, 6)
+                ).forAll { dishesAlreadyOnCounter, dishesOnCounter ->
+                    val household = HouseholdConstants(
+                        dishwasherDishCapacity = capacity,
+                        numberOfDishesPerMeal = dishesPerMeal
+                    )
+                    val stateInput =
+                        DishwasherState.Running(
+                            dishesOnCounter = dishesAlreadyOnCounter,
+                            meal = meal,
+                            dishesInWasher = 0,
+                            hoursLeftToRun = 1.0
+                        )
+
+                    val result = transitionFromRunning(household = household, state = stateInput)
+
+                    result.first.dishesOnCounter shouldBe dishesOnCounter
                 }
                 true
             }
