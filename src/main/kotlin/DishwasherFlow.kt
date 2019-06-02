@@ -28,7 +28,14 @@ fun run2(household: HouseholdConstants, days: Int, transition: (DishwasherState)
     var maxHours = days * 24
     println("Household=$household")
     val stats =
-        generateSequence(Pair(Statistics(dishesOnCounter = 0), DishwasherState.Idle() as DishwasherState)) { next ->
+        generateSequence(
+            Pair(
+                Statistics(
+                    dishesOnCounter = 0,
+                    hoursPassed = 0
+                ), DishwasherState.Idle() as DishwasherState
+            )
+        ) { next ->
             transition(next.second)
         }
             .takeWhile {
@@ -37,7 +44,7 @@ fun run2(household: HouseholdConstants, days: Int, transition: (DishwasherState)
             }
             .map {
                 it.first
-            }.fold(Statistics(dishesOnCounter = 0)) { stats, result -> stats.add(result) }
+            }.fold(Statistics(dishesOnCounter = 0, hoursPassed = 0)) { stats, result -> stats.add(result) }
     println("Cycles=${stats.cycles};Water_Usage=${household.dishwasherWaterUsage.gallonsPerCycle * stats.cycles};Throughput=${stats.dishesCleaned / days}/day")
 }
 
@@ -62,30 +69,43 @@ fun transitionFromIdle(
         household.dishwasherDishCapacity,
         state.dishesInWasher + household.numberOfDishesPerMeal
     )
+    val nextMeal = getNextMeal(state.meal)
+    val dishesOnCounter = maxOf(
+        0,
+        state.dishesInWasher + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
+    )
     return when {
-        dishesInWasher >= getRunThreshold(household) -> {
-            val dishesOnCounter = maxOf(
-                0,
-                state.dishesInWasher + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
+        dishesInWasher < getRunThreshold(household) ->
+            Pair(
+                Statistics(hoursPassed = nextMeal.hoursBeforeWeDirtyDishes),
+                DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = nextMeal)
             )
+        household.hoursPerCycle <= nextMeal.hoursBeforeWeDirtyDishes -> Pair(
+            Statistics(
+                cycles = 1,
+                dishesCleaned = dishesInWasher,
+                dishesOnCounter = dishesOnCounter,
+                hoursPassed = nextMeal.hoursBeforeWeDirtyDishes
+            ),
+            DishwasherState.Finished(dishesOnCounter = dishesOnCounter, meal = nextMeal)
+        )
+        else -> {
+
             Pair(
                 Statistics(
                     cycles = 1,
                     dishesCleaned = dishesInWasher,
-                    dishesOnCounter = dishesOnCounter
+                    dishesOnCounter = dishesOnCounter,
+                    hoursPassed = nextMeal.hoursBeforeWeDirtyDishes
                 ),
                 DishwasherState.Running(
                     dishesInWasher = dishesInWasher,
                     dishesOnCounter = dishesOnCounter,
-                    meal = getNextMeal(state.meal),
+                    meal = nextMeal,
                     hoursLeftToRun = household.hoursPerCycle
                 )
             )
         }
-        else -> Pair(
-            Statistics(),
-            DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = getNextMeal(state.meal))
-        )
     }
 }
 
@@ -97,26 +117,43 @@ fun transitionFromFinished(
         state.dishesOnCounter + household.numberOfDishesPerMeal,
         household.dishwasherDishCapacity
     )
+    val runThreshold = getRunThreshold(household)
+    val dishesOnCounter = maxOf(
+        0,
+        state.dishesOnCounter + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
+    )
+    val nextMeal = getNextMeal(state.meal)
     return when {
-        getRunThreshold(household) <= dishesInWasher -> {
-            val dishesOnCounter = maxOf(
-                0,
-                state.dishesOnCounter + household.numberOfDishesPerMeal - household.dishwasherDishCapacity
-            )
+        dishesInWasher < runThreshold -> Pair(
+            Statistics(hoursPassed = 0),
+            DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = nextMeal)
+        )
+        household.hoursPerCycle <= nextMeal.hoursBeforeWeDirtyDishes ->
             Pair(
-                Statistics(cycles = 1, dishesCleaned = dishesInWasher, dishesOnCounter = dishesOnCounter),
+                Statistics(
+                    hoursPassed = nextMeal.hoursBeforeWeDirtyDishes,
+                    cycles = 1,
+                    dishesOnCounter = dishesOnCounter
+                ),
+                DishwasherState.Finished(dishesOnCounter = dishesOnCounter, meal = nextMeal)
+            )
+        else -> {
+
+            Pair(
+                Statistics(
+                    cycles = 1,
+                    dishesCleaned = dishesInWasher,
+                    dishesOnCounter = dishesOnCounter,
+                    hoursPassed = 0
+                ),
                 DishwasherState.Running(
                     dishesOnCounter = dishesOnCounter,
                     dishesInWasher = dishesInWasher,
                     hoursLeftToRun = household.hoursPerCycle,
-                    meal = getNextMeal(state.meal)
+                    meal = nextMeal
                 )
             )
         }
-        else -> Pair(
-            Statistics(),
-            DishwasherState.Idle(dishesInWasher = dishesInWasher, meal = getNextMeal(state.meal))
-        )
     }
 }
 
@@ -125,17 +162,18 @@ fun transitionFromRunning(
     household: HouseholdConstants
 ): Pair<Statistics, DishwasherState> {
     val dishesOnCounter = state.dishesOnCounter + household.numberOfDishesPerMeal
+    val nextMeal = getNextMeal(state.meal)
     return Pair(
-        Statistics(dishesOnCounter = dishesOnCounter), when {
+        Statistics(dishesOnCounter = dishesOnCounter, hoursPassed = nextMeal.hoursBeforeWeDirtyDishes), when {
             state.hoursLeftToRun > state.meal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running(
                 dishesOnCounter = dishesOnCounter,
                 dishesInWasher = state.dishesInWasher,
-                meal = getNextMeal(state.meal),
-                hoursLeftToRun = state.hoursLeftToRun - getNextMeal(state.meal).hoursBeforeWeDirtyDishes
+                meal = nextMeal,
+                hoursLeftToRun = state.hoursLeftToRun - nextMeal.hoursBeforeWeDirtyDishes
             )
             else -> DishwasherState.Finished(
                 dishesOnCounter = dishesOnCounter,
-                meal = getNextMeal(state.meal)
+                meal = nextMeal
             )
         }
     )

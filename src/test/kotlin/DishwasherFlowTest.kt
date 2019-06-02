@@ -13,7 +13,7 @@ internal class DishwasherFlowTest : FeatureSpec({
 
     feature("dirty dishes") {
         val householdInput =
-            dishesPerMealAreLessThanDishwasherCapacity(arbitraryHousehold()).copy(dishwasherUtilizationPercent = 1.0)
+            dishesPerMealAreLessThanDishwasherCapacity(arbitraryHousehold()).copy(dishwasherUtilizationPercent = 1.0, hoursPerCycle = longestTimeBetweenMeals() + 1.0)
         scenario("queues dishes from meal into dishwasher") {
 
             val result = transitionFromIdle(householdInput, DishwasherState.Idle())
@@ -38,7 +38,7 @@ internal class DishwasherFlowTest : FeatureSpec({
 
         scenario("only queues dishes into washer up to capacity when it finishes") {
             val tailoredHousehold =
-                dishesPerMealAreLessThanDishwasherCapacity(dishwasherFinishesAfterAnyMeal(householdInput))
+                dishesPerMealAreLessThanDishwasherCapacity(dishwasherRunsThroughAnyMeal(householdInput))
 
             val dishwasherState = DishwasherState.Finished(
                 tailoredHousehold.dishwasherDishCapacity,
@@ -98,14 +98,17 @@ internal class DishwasherFlowTest : FeatureSpec({
         }
 
         scenario("dishwasher starts when enough dishes have put inside") {
-            forAll(HouseholdGenerator()) { householdInput: HouseholdConstants ->
+            forAll(Gen.enum<Meal>(), Gen.choose(0, 1)) { meal, howMuchOverThreshold ->
+                val householdInput = HouseholdConstants(hoursPerCycle = getNextMeal(meal).hoursBeforeWeDirtyDishes + 1.0)
                 val sut = dishwasherHouseholdFlow(householdInput)
-
                 val runThreshold =
                     round(householdInput.dishwasherDishCapacity * householdInput.dishwasherUtilizationPercent)
                         .toInt()
                 val dishwasherState =
-                    DishwasherState.Idle(dishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal)
+                    DishwasherState.Idle(
+                        dishesInWasher = runThreshold - householdInput.numberOfDishesPerMeal + howMuchOverThreshold,
+                        meal = meal
+                    )
 
                 val result = sut(dishwasherState)
 
@@ -188,7 +191,7 @@ internal class DishwasherFlowTest : FeatureSpec({
                 table(
                     headers("dishes in washer", "dishes on counter"),
                     row(capacity, 5),
-                    row(capacity-1, 4)
+                    row(capacity - 1, 4)
                 ).forAll { dishesInWasher, dishesOnCounter ->
                     val household =
                         HouseholdConstants(numberOfDishesPerMeal = dishesPerMeal, dishwasherDishCapacity = capacity)
@@ -247,11 +250,83 @@ internal class DishwasherFlowTest : FeatureSpec({
                 true
             }
         }
+
+        scenario("given dishwasher is running when its meal time then the hours passed stat is recorded based on the meal") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                val household = HouseholdConstants(
+                    dishwasherDishCapacity = capacity,
+                    numberOfDishesPerMeal = dishesPerMeal
+                )
+                val stateInput =
+                    DishwasherState.Running(
+                        meal = meal,
+                        dishesInWasher = 0,
+                        hoursLeftToRun = 1.0,
+                        dishesOnCounter = 0
+                    )
+
+                val result = transitionFromRunning(household = household, state = stateInput)
+
+                result.first.hoursPassed shouldBe result.second.meal.hoursBeforeWeDirtyDishes
+                true
+            }
+        }
+
+        scenario("given dishwasher is idle when its meal time then the hours passed stat is recorded based on the meal") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                val household = HouseholdConstants()
+                val stateInput =
+                    DishwasherState.Idle(
+                        meal = meal,
+                        dishesInWasher = 0
+                    )
+
+                val result = transitionFromIdle(household = household, state = stateInput)
+
+                result.first.hoursPassed shouldBe result.second.meal.hoursBeforeWeDirtyDishes
+                true
+            }
+        }
+    }
+
+    feature("finishing fast") {
+        scenario("given queued dishes are at run threshold and dishwasher has finished when its meal time then dishwasher finishes by next meal") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                val household = HouseholdConstants(hoursPerCycle = getNextMeal(meal).hoursBeforeWeDirtyDishes - 1.0)
+                val stateInput =
+                    DishwasherState.Finished(
+                        dishesOnCounter = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt(),
+                        meal = meal
+                    )
+
+                val result = transitionFromFinished(household = household, state = stateInput)
+
+                (result.second is DishwasherState.Finished) shouldBe true
+                true
+            }
+        }
+        scenario("given dishes are at run threshold and dishwasher is idle when its meal time then dishwasher finishes by next meal") {
+            forAll(Gen.enum<Meal>()) { meal ->
+                val household = HouseholdConstants(hoursPerCycle = getNextMeal(meal).hoursBeforeWeDirtyDishes - 1.0)
+                val stateInput =
+                    DishwasherState.Idle(
+                        dishesInWasher = (household.dishwasherDishCapacity * household.dishwasherUtilizationPercent).toInt(),
+                        meal = meal
+                    )
+
+                val result = transitionFromIdle(household = household, state = stateInput)
+
+                (result.second is DishwasherState.Finished) shouldBe true
+                true
+            }
+        }
+
+        scenario("given dishes are at run threshold and dishwasher is finished in the middle of the time before current meal, when its meal time then it finishes by next meal") {
+
+        }
+
     }
 })
-
-private fun dishwasherFinishesAfterAnyMeal(it: HouseholdConstants) =
-    it.copy(hoursPerCycle = shortestTimeBetweenMeals().toDouble() - 1)
 
 private fun dishwasherRunsThroughAnyMeal(it: HouseholdConstants) =
     it.copy(hoursPerCycle = longestTimeBetweenMeals() + 1)
