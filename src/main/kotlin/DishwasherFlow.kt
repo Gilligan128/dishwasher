@@ -138,7 +138,6 @@ fun transitionFromFinished(
                 DishwasherState.Finished(dishesOnCounter = dishesOnCounter, meal = nextMeal)
             )
         else -> {
-
             Pair(
                 Statistics(
                     cycles = 1,
@@ -165,7 +164,7 @@ fun transitionFromRunning(
     val nextMeal = getNextMeal(state.meal)
     return Pair(
         Statistics(dishesOnCounter = dishesOnCounter, hoursPassed = nextMeal.hoursBeforeWeDirtyDishes), when {
-            state.hoursLeftToRun > state.meal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running(
+            state.hoursLeftToRun > nextMeal.hoursBeforeWeDirtyDishes.toDouble() -> DishwasherState.Running(
                 dishesOnCounter = dishesOnCounter,
                 dishesInWasher = state.dishesInWasher,
                 meal = nextMeal,

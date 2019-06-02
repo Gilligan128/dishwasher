@@ -58,12 +58,12 @@ internal class DishwasherFlowTest : FeatureSpec({
         val currentMeal = Meal.Dinner
         scenario("dishwasher keeps running if not enough time has passed") {
             val householdInput =
-                arbitraryHousehold().copy(hoursPerCycle = (currentMeal.hoursBeforeWeDirtyDishes + 1).toDouble())
+                arbitraryHousehold().copy(hoursPerCycle = (getNextMeal(currentMeal).hoursBeforeWeDirtyDishes + 1).toDouble())
             val sut = dishwasherHouseholdFlow(householdInput)
             val dishwasherState = DishwasherState.Running(
                 0,
                 3,
-                currentMeal.hoursBeforeWeDirtyDishes + 1.0,
+                getNextMeal(currentMeal).hoursBeforeWeDirtyDishes + 1.0,
                 meal = currentMeal
             )
 
@@ -290,7 +290,7 @@ internal class DishwasherFlowTest : FeatureSpec({
     }
 
     feature("finishing fast") {
-        scenario("given queued dishes are at run threshold and dishwasher has finished when its meal time then dishwasher finishes by next meal") {
+        scenario("given queued dishes are at run threshold, dishwasher has finished, and cycle time is shorter than time before next meal when its meal time then dishwasher finishes by next meal") {
             forAll(Gen.enum<Meal>()) { meal ->
                 val household = HouseholdConstants(hoursPerCycle = getNextMeal(meal).hoursBeforeWeDirtyDishes - 1.0)
                 val stateInput =
@@ -305,7 +305,7 @@ internal class DishwasherFlowTest : FeatureSpec({
                 true
             }
         }
-        scenario("given dishes are at run threshold and dishwasher is idle when its meal time then dishwasher finishes by next meal") {
+        scenario("given dishes are at run threshold and dishwasher is idle and cycle time is shorter than time before next meal when its meal time then dishwasher finishes by next meal") {
             forAll(Gen.enum<Meal>()) { meal ->
                 val household = HouseholdConstants(hoursPerCycle = getNextMeal(meal).hoursBeforeWeDirtyDishes - 1.0)
                 val stateInput =
@@ -320,11 +320,6 @@ internal class DishwasherFlowTest : FeatureSpec({
                 true
             }
         }
-
-        scenario("given dishes are at run threshold and dishwasher is finished in the middle of the time before current meal, when its meal time then it finishes by next meal") {
-
-        }
-
     }
 })
 
